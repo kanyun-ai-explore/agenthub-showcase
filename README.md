@@ -13,7 +13,7 @@
 这里收录了使用 **AgentHub 构建的应用案例**。目前包含电商和在线教育两个 case，后续会继续扩展。
 每个案例都公开了 Agent 定义、业务工具和交互界面的源码，可以从一个具体效果，一路看到它在 AgentHub 上的实现。
 
-**[进入 AgentHub](https://agenthub.zhenguanyu.com/921b91f0-e49a-4733-ab7c-c7fd66f01941/sessions) · [电商案例](#电商从选购到经营) · [在线教育案例](#在线教育从咨询到课堂) · [如何构建](#如何在-agenthub-上构建)**
+**[进入 AgentHub](https://agenthub.zhenguanyu.com/921b91f0-e49a-4733-ab7c-c7fd66f01941/sessions) · [AgentHub 文档](https://agenthub.zhenguanyu.com/v1/docs) · [电商案例](#电商从选购到经营) · [在线教育案例](#在线教育从咨询到课堂) · [如何构建](#如何在-agenthub-上构建)**
 
 ## 电商：从选购到经营
 
@@ -176,6 +176,8 @@ AgentHub 提供隔离的会话沙箱、运行环境和模型接入。平台预�
 - **面向知识服务的业务**：从教育案例看多角色分工、版本化业务口径和交互式教学如何组织。
 
 **[进入 AgentHub，构建你的 Agent →](https://agenthub.zhenguanyu.com/921b91f0-e49a-4733-ab7c-c7fd66f01941/sessions)**
+
+开始构建前，可以阅读 [AgentHub 文档](https://agenthub.zhenguanyu.com/v1/docs)，了解平台的使用方式。
 
 后续案例会继续沿用“业务场景、交互效果、Agent 定义与工具实现”的组织方式。
 可以关注本仓库的更新，也可以直接从 [Agent 定义目录](./agenthub/agents/) 深入查看感兴趣的角色。
