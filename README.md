@@ -5,6 +5,8 @@
 把角色、技能和业务工具交给开发者，把运行环境、模型接入、版本发布和会话管理交给平台，
 让团队把更多时间用在业务效果上。从定义一个 Agent，到把它交付进应用，AgentHub 提供一条统一的构建与运行路径。
 
+[了解 AgentHub 的设计理念与交付方式 →](https://agenthub.zhenguanyu.com/v1/docs/why-agenthub)
+
 这些 Agent 可以走进怎样的业务场景？
 
 它可以帮顾客比较商品、把选中的装备放进购物车，也可以为商家分析经营数据、拟好待审批的改动；
@@ -21,7 +23,7 @@
 包含面向顾客的导购 Agent 和面向商家运营的商家 Agent。
 
 **以 CMA 为应用能力参照，在 AgentHub 上交付同类业务体验。**
-我们沿用 CMA 的角色分工、技能、业务工具契约和护栏，把它们接入 AgentHub 的文件定义 Agent 与 MCP 运行方式。
+我们沿用 CMA 的角色分工、技能、业务工具契约和护栏，把它们接入 AgentHub 的[文件定义 Agent](https://agenthub.zhenguanyu.com/v1/docs/file-agent) 与 MCP 运行方式。
 这也体现了 AgentHub 的构建理念：Agent 的业务定义可以复用，发布和运行由平台统一承接。
 
 [查看 CMA 原项目](https://github.com/anthropics/commerce-agents) ·
@@ -67,14 +69,14 @@
 
 [查看 Agent 定义](./agenthub/agents/cma-merchant/agent.yaml) ·
 [查看提示词](./agenthub/agents/cma-merchant/CLAUDE.md) ·
-[查看完整实现说明](./agenthub/agents/cma-merchant/README.md)
+[查看审批回路实现](./agenthub/agents/cma-merchant/README.md#审批回路是怎么闭合的)
 
 案例使用演示业务数据，结算未接入支付。
 
 ## 在线教育：从咨询到课堂
 
 同一套课程业务，可以由多个各司其职的 Agent 服务家长、学生和老师。
-这个案例包含五个角色，共用课程 MCP，分别定义自己的提示词、工具使用方式和交互界面。
+这个案例包含五个角色，通过一个[托管 MCP](https://agenthub.zhenguanyu.com/v1/docs/mcp)共用课程服务，分别定义自己的提示词、工具使用方式和交互界面。
 
 | 角色 | 可以从什么问题开始 | 展示的效果 | Agent 定义 |
 | --- | --- | --- | --- |
@@ -90,12 +92,12 @@
 
 1. Agent 读取教学大纲，用 `present_slide` 返回课件内容，界面渲染十格阵、数字分解等教具。
 2. Agent 用 `present_exercise` 出一道练习，等待孩子点击作答。
-3. 作答结果回到下一轮对话。Agent 根据答案选择继续、换一种教具重讲，或退回更基础的知识点。
+3. 作答结果作为[下一轮对话的输入](https://agenthub.zhenguanyu.com/v1/docs/quickstart#multi-turn)。Agent 根据答案选择继续、换一种教具重讲，或退回更基础的知识点。
 
 **课件内容由 Agent 组织，组件由应用渲染，学生的操作又成为 Agent 的下一轮输入。**
 同一套工具输出可以对应课堂屏幕，也可以由其他客户端实现自己的展示方式。
 
-数学课会话就绪后，应用还会为同一访客提前创建语文课会话。切课时优先复用预建会话，减少等待；
+数学课会话就绪后，应用还会为同一访客[提前创建语文课会话](https://agenthub.zhenguanyu.com/v1/docs/quickstart#create-session)。切课时优先复用预建会话，减少等待；
 预建会话失效时则回到正常创建流程。
 
 [查看数学老师的教学方式](./agenthub/agents/edu-math-tutor/CLAUDE.md) ·
@@ -104,7 +106,7 @@
 
 ### 让业务口径和数据有出处
 
-课程顾问把开课安排、购课和退款规则放在随 Agent 版本发布的记忆文档中。
+课程顾问把开课安排、购课和退款规则放在[随 Agent 版本发布的记忆文档](https://agenthub.zhenguanyu.com/v1/docs/agent-memory#file-defined)中。
 运营调整口径时，可以审阅文档改动，再随新版本发布。
 
 学情分析通过 `get_weekly_report` 计算样例数据，再由 Agent 解释班级疑难点和需要关注的学生情况，
@@ -139,28 +141,40 @@ agenthub/agents/edu-course-sales/
 角色之间可以复用业务工具，同时保留各自的行为定义。例如数学老师和课程顾问共用课程 MCP，
 但一个负责互动教学，一个负责选课咨询。
 
+目录与字段的含义见 [agent.yaml 配置参考](https://agenthub.zhenguanyu.com/v1/docs/agent-yaml#anatomy)；
+准备创建自己的 Agent 时，可以从[创建第一个 Agent](https://agenthub.zhenguanyu.com/v1/docs/quickstart#first-agent)开始。
+
 ### 2. 接入业务工具
 
-把商品查询、购物车、课程目录、学习数据等能力封装成 MCP 工具，注册到 AgentHub 后，在 Agent 定义中引用。
+把商品查询、购物车、课程目录、学习数据等能力封装成 MCP 工具，在 AgentHub 中[注册并引用 MCP](https://agenthub.zhenguanyu.com/v1/docs/mcp#manage)。
 
 电商案例使用随 Agent 包发布的 **stdio MCP**，调用商城业务后端；
 教育案例使用站点提供的**远程 MCP**，供五个 Agent 共用。
 业务方决定工具能查什么、能改什么，以及什么操作需要审批。
 
+两种接入方式的运行位置和凭据处理差别，见 [stdio 与远程 MCP](https://agenthub.zhenguanyu.com/v1/docs/mcp#kinds)。
+
 ### 3. 发布与运行
 
-仓库绑定 AgentHub 项目后，默认分支上的提交进入平台流水线，冻结成 Agent 版本并按发布流程进入对应槽位。
+仓库绑定 AgentHub 项目后，默认分支上的提交进入 [Agent Pipeline](https://agenthub.zhenguanyu.com/v1/docs/agent-pipeline#steps)，冻结成 Agent 版本并按发布流程进入对应槽位。
 模型选择、提示词、工具引用和随包代码因此可以一起审阅、一起发布。
 
-AgentHub 提供隔离的会话沙箱、运行环境和模型接入。平台预热池可以减少会话启动等待，
+后续改动和回退遵循同一套版本管理方式，见[变更与回滚](https://agenthub.zhenguanyu.com/v1/docs/file-agent#change-and-rollback)。
+
+AgentHub 提供隔离的会话沙箱、[运行环境](https://agenthub.zhenguanyu.com/v1/docs/environment#environment-resource)和[模型服务](https://agenthub.zhenguanyu.com/v1/docs/model-service)。
+[平台预热池](https://agenthub.zhenguanyu.com/v1/docs/operations#prewarm-scope)可以减少会话启动等待，
 应用也可以像切课案例一样，提前创建后续需要的会话。
 
 ### 4. 接入应用界面
 
-应用服务端通过 AgentHub SDK 创建会话、发送用户输入、等待轮次完成，并把流式事件转发给前端。
+应用服务端通过 [AgentHub SDK](https://agenthub.zhenguanyu.com/v1/docs/api-and-sdk) 创建会话、发送用户输入、
+[等待轮次完成](https://agenthub.zhenguanyu.com/v1/docs/sessions#wait)，并把流式事件转发给前端。
 
 `present_products`、`present_slide` 等工具返回结构化内容，前端将其渲染成商品卡、课件和报表；
 点击选项、提交答案等操作再进入下一轮对话。平台凭据保留在应用服务端。
+
+完整调用流程见[接入业务系统](https://agenthub.zhenguanyu.com/v1/docs/quickstart#integrate)；
+前端如何接收文本和工具输出，见[流式消息格式](https://agenthub.zhenguanyu.com/v1/docs/api-and-sdk#message-format)。
 
 [查看会话接入代码](./apps/storefront-web/app/api/agenthub/) ·
 [查看展示组件](./apps/storefront-web/components/generative/)
@@ -177,7 +191,9 @@ AgentHub 提供隔离的会话沙箱、运行环境和模型接入。平台预�
 
 **[进入 AgentHub，构建你的 Agent →](https://agenthub.zhenguanyu.com/921b91f0-e49a-4733-ab7c-c7fd66f01941/sessions)**
 
-开始构建前，可以阅读 [AgentHub 文档](https://agenthub.zhenguanyu.com/v1/docs)，了解平台的使用方式。
+下一步：[创建第一个 Agent](https://agenthub.zhenguanyu.com/v1/docs/quickstart#first-agent) ·
+[把 Agent 接入业务系统](https://agenthub.zhenguanyu.com/v1/docs/quickstart#integrate) ·
+[浏览完整文档](https://agenthub.zhenguanyu.com/v1/docs)
 
 后续案例会继续沿用“业务场景、交互效果、Agent 定义与工具实现”的组织方式。
 可以关注本仓库的更新，也可以直接从 [Agent 定义目录](./agenthub/agents/) 深入查看感兴趣的角色。
