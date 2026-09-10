@@ -1,0 +1,18 @@
+# skill 安装产物——不进 git，也不进发布包。下面两条是一组：忽略 skills 下全部
+# 条目，再反选真实目录（本包 5 个 skill 全是 vendor 的手写目录，非 reskill 安装
+# 产物）。见 skill agenthub-cli 的 Gotchas。
+.skills/
+.claude/skills/*
+!.claude/skills/*/
+
+# 本地 MCP 配置是环境投影，不是声明。
+.mcp.json
+
+# 运行时产物
+.agenthub-setup-done
+
+# Python 构建产物（vendored 包不提交 dist/egg-info；源码本身要跟踪）
+runtime/src/*/dist/
+runtime/src/*/*.egg-info/
+**/__pycache__/
+*.pyc

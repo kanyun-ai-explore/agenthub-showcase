@@ -1,0 +1,39 @@
+apiVersion: agenthub/v1alpha1
+format: claude_code
+
+# 上游 course-ai-team-demo 用的是 claude-sonnet-5；本仓库统一跑同一个模型，
+# 与电商两个 agent 保持一致。
+model: deepseek-v4-flash
+
+# system prompt 在同目录的 CLAUDE.md（claude_code 格式的约定文件）。
+
+# 五个教育 agent 共用一个 MCP：课件、课程目录、学情数据、以及所有 present_* 展示工具。
+# 共用而不是每个 agent 一个，是因为它们看的是同一份业务数据，拆开只会让口径漂移。
+# ⚠️ 换成你自己控制面上注册的 managed MCP id。填错不会被 `agenthub agent check`
+# 拦下，只有流水线 freeze 时才报。
+mcpServers:
+  # 教育 MCP，用 remote 而不是 stdio：`always_ask` 这类工具级人工审批只在经网关的
+  # remote MCP 上有强制点，给 stdio 声明会在发布期被直接拒掉。服务端实现由
+  # apps/storefront-web 的 /api/mcp/course 提供（Streamable HTTP），逻辑与
+  # shared/course-stdio-server 由 scripts/course-mcp-parity/run.sh 对拍锁住。
+  # serverKey 仍是 course（由 displayName slug 化），所以 mcp__course__* 与 allowedTools 不变。
+  # 注册时对 get_student_progress 声明了 always_ask：调用会暂停等人工审批。
+  - vcrd_PLACEHOLDER
+
+environment: cma-python         # 与电商两个 agent 同一个 Environment
+
+agentOptions:
+  maxTurns: 60
+  effort: low
+  allowedTools: [Skill, mcp__course]
+  # 内置工具面：对齐上游 CMA 的 `tools=["Skill"]`（挂载面只留 Skill）。
+  # 平台没有「挂载面」字段，所以用 disallowedTools 取补集等价实现；allowedTools 只是
+  # 配置期的意图声明，两个都写。
+  # 本 agent 不依赖任何内置工具：无 skills、无 setupScriptFile，记忆文档由平台侧检索，
+  # CLAUDE.md 由平台注入，都不经过 Read。
+  disallowedTools: [Read, Write, Edit, Bash, Grep, Glob, LS, WebFetch]
+
+env:
+  PYTHONPATH: "/workspace/.session/agent-package/runtime/src/course-stdio-server"
+  # D-R4 mode A：present_* 的返回文本本身就是 UI 信封，不需要沙箱反向打回浏览器。
+  CMA_UI_DELIVERY: result_text

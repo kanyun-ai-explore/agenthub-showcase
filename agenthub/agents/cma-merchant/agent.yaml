@@ -1,0 +1,100 @@
+apiVersion: agenthub/v1alpha1
+format: claude_code
+
+# 与 cma-shopping 同一条模型服务通道。merchant 在 CMA 上游用的是推理更强的一档，
+# 这里暂时和 shopping 保持一致；换档时改这一行即可。
+modelService: model
+model: deepseek-v4-flash
+
+# 与 cma-shopping 同一个平台 Environment（同一批三方依赖固定版本：
+# pydantic / anthropic / mcp / pyyaml / httpx）。
+environment: cma-python
+
+# system prompt 不在这里：它是本目录的 CLAUDE.md，由 CMA 自己的 managed-agent
+# system prompt 推导而来，见 runtime/scripts/derive-claude-md.py。
+
+# 没有 setupScriptFile——原因同 cma-shopping/agent.yaml：平台跑它的时候 agent 包还没
+# 解压到沙箱里，所以它装不了本包自带的 vendored 代码。可导入性靠下面 env 的 PYTHONPATH。
+
+# ⚠️ 换成你自己控制面上注册的 managed MCP id。id 写错不会被 `agenthub agent check`
+# 抓到，只在流水线 freeze 时才报错。
+mcpServers:
+  - id: vcrd_PLACEHOLDER   # merchant stdio MCP (python3 -m merchant_stdio_server)
+    # 22 个已注册工具的明文 allowlist（真相源是 runtime/tests/smoke_stdio.py 的
+    # EXPECTED_TOOLS）。**没有任何一条带 `approvalPolicy: always_ask`**：always_ask 是
+    # 网关层强制的机制，只对 remote transport 的 MCP 成立，给 stdio 的 MCP 声明它会在
+    # 注册时被直接拒掉——stdio 前面没有网关，没有地方执行这个暂停。
+    #
+    # 本包的人工审批用的是 CMA 自己那一层：`require_host_approval=True` + 每个写操作
+    # 只暂存不落地，直到运营在 apps/storefront-web 的 /operator 页面上批准
+    # （见 runtime/src/merchant-stdio-server）。把这个 MCP 改成 remote 暴露、让
+    # always_ask 作为第二把平台强制的锁生效，是后续演进方向，不是当前缺口。
+    tools:
+      - name: get_business_snapshot
+      - name: query_metrics
+      - name: get_campaign_performance
+      - name: search_listings
+      - name: get_listing
+      - name: get_inventory_alerts
+      - name: get_order_issues
+      - name: get_pricing_context
+      - name: get_pending_changes
+      - name: save_memory
+      - name: recall_memories
+      - name: present_metrics
+      - name: present_digest
+      - name: present_change_preview
+      - name: present_suggestions
+      - name: stage_listing_update
+      - name: stage_price_update
+      - name: stage_inventory_action
+      - name: stage_promotion
+      - name: stage_campaign
+      - name: apply_change
+      - name: discard_change
+
+agentOptions:
+  maxTurns: 16
+  effort: low                  # == MerchantAgentConfig 的 thinking_effort="low"
+  allowedTools: [Skill, mcp__merchant]
+  # 见 cma-shopping/agent.yaml 同位置的注释：内置工具面对齐上游的 `tools=["Skill"]`，
+  # 用 disallowedTools 取补集等价实现。本包的写操作保护是 CMA 自己的那一层
+  # （require_host_approval + /operator 审批页），与这里的工具面收窄是两件独立的事，
+  # 互不替代。
+  disallowedTools: [Read, Write, Edit, Bash, Grep, Glob, LS, WebFetch]
+
+env:
+  # 给 `python3 -m merchant_stdio_server`（注册的 stdio MCP 命令）用的 vendored 包路径，
+  # 说明见 cma-shopping/agent.yaml 的 PYTHONPATH 注释。merchant 还会导入 shopping_agent
+  # （委派），所以是四个目录。
+  PYTHONPATH: "/workspace/.session/agent-package/runtime/src/commerce-common:/workspace/.session/agent-package/runtime/src/shopping-agent-core:/workspace/.session/agent-package/runtime/src/merchant-agent-core:/workspace/.session/agent-package/runtime/src/merchant-stdio-server"
+  CMA_BRAND_NAME: ACME
+  CMA_ASSISTANT_NAME: "ACME Merchant Assistant"
+  CMA_UI_DELIVERY: result_text   # 模式 A；模式 B 的说明见 cma-shopping/agent.yaml 同名 key。
+  # 必须与 CLAUDE.md 里出现的 "the operator portal's approval page" 以及 __main__.py 的
+  # _build_config 默认值一致——见 runtime/scripts/derive-claude-md.py 的模块 docstring。
+  CMA_APPROVAL_SURFACE: "the operator portal's approval page"
+  # 审批回路：`_mirror_changes` 把暂存的变更推到这里，/operator 才有东西可批；
+  # `_fetch_approved_ids` 在每次 apply_change 之前重新拉一遍已批准集合（从不缓存，
+  # 见该函数的 docstring）。这两个都是**从沙箱打进** storefront-web 的调用，所以只对
+  # 沙箱能访问到的部署有效。
+  #
+  # ⚠️ `/api` 后缀是契约的一部分，不是装饰：客户端 POST 的是 `<base>/changes/mirror`，
+  # 路由在 `/api/changes/mirror`。少了它，每次 mirror 都是一个**被吞掉的 404**——
+  # `_mirror_changes` 按设计就是 best-effort，agent 照样回报「已暂存」，只有运营队列
+  # 会莫名其妙一直空着。
+  #
+  # ⚠️ 一个仓库只指一个后端。不同环境的 agent 指向同一个 host，会把这个环境的商家变更
+  # 镜像进另一个环境的审批队列。
+  BACKEND_BASE_URL: https://<your-storefront-host>/api
+  # 商家身份用固定值：这两个值与 apps/storefront-web/lib/showcase/merchant.ts 的
+  # SHOWCASE_MERCHANT_ID / SHOWCASE_OPERATOR 必须一致（审批页按它读队列）。
+  # 之前是经 configValues 每会话注入的，代价是永远进不了预热池。
+  CMA_MERCHANT_ID: acme-outdoors
+  CMA_OPERATOR: demo-operator
+
+# CMA_CHAT_SESSION_ID 故意不设：stdio server 会默认成 "local-session"
+# （见 runtime/src/merchant-stdio-server/.../__main__.py），这套部署里没有任何东西
+# 消费按会话区分的值。
+
+# 没有 memory 段，理由同 cma-shopping/agent.yaml。

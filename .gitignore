@@ -1,0 +1,38 @@
+# Node / pnpm / turbo
+node_modules/
+.next/
+.turbo/
+dist/
+build/
+*.tsbuildinfo
+.pnpm-store/
+# Next.js 每次 dev/build 都会重新生成
+next-env.d.ts
+
+# Local clone of upstream commerce-agents; scripts/vendor-cma.sh reads from here.
+# Never committed — vendored output lands in agenthub/agents/cma-shopping/runtime/src/.
+.vendor-src/
+
+# Python (agent packages vendor CMA source; local smoke-testing venvs are never committed)
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+venv/
+*.egg-info
+
+# OS / editor
+.DS_Store
+*.swp
+
+# Env files
+.env
+.env.local
+
+# apps/storefront-web's embedded demo backend runtime state (carts, memory facts,
+# staged-change mirror) — see lib/backend/paths.ts. Local/offline-test artifacts,
+# never committed.
+apps/storefront-web/.data/
+
+# 教育 MCP 的四份副本由 scripts/sync-edu-runtime.sh 生成，事实源是 edu-shared。
+# 不 ignore：agent 包要打进去，必须进 git。改动请改 edu-shared 再跑同步脚本。

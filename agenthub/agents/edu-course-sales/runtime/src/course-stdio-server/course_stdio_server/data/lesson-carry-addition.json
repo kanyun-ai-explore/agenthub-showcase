@@ -1,0 +1,103 @@
+{
+  "lesson_id": "carry-addition",
+  "title": "20 以内进位加法 · 凑十法",
+  "grade": "一年级",
+  "knowledge_point": "20以内进位加法",
+  "duration_min": 15,
+  "objective": "会用凑十法算 9+几、8+几，能说出为什么要先凑十",
+  "slides": [
+    {
+      "slide_id": "s1-hook",
+      "kind": "intro",
+      "title": "9 个 + 4 个，一共几个？",
+      "body": "小豆有 9 颗糖，妈妈又给了 4 颗。现在一共有多少颗糖？",
+      "visual": { "type": "ten_frame", "frames": [9, 4], "labels": ["原来有", "又给了"] },
+      "teacher_note": "先让孩子自己数一数，不急着教方法"
+    },
+    {
+      "slide_id": "s2-why",
+      "kind": "concept",
+      "title": "一个一个数，太慢了",
+      "body": "9、10、11、12、13——数对了，但是慢。有没有更快的办法？\n\n关键在这里：满 10 个的时候特别好算。",
+      "visual": { "type": "ten_frame", "frames": [10, 3], "labels": ["凑满 10", "剩下的"] },
+      "teacher_note": "制造需求：让孩子先体会到「慢」，再给方法"
+    },
+    {
+      "slide_id": "s3-bond",
+      "kind": "concept",
+      "title": "凑十法：把 4 拆开",
+      "body": "9 还差 1 就满 10。所以把 4 拆成 1 和 3：\n先用 1 把 9 凑成 10，再加剩下的 3。",
+      "visual": { "type": "number_bond", "whole": 4, "parts": [1, 3], "caption": "4 拆成 1 和 3" },
+      "teacher_note": "重点问：为什么拆成 1 和 3，不是 2 和 2"
+    },
+    {
+      "slide_id": "s4-steps",
+      "kind": "worked",
+      "title": "一步一步算给你看",
+      "body": "这就是凑十法。记住三句话：看大数、拆小数、先凑十。",
+      "visual": {
+        "type": "steps",
+        "steps": ["9 + 4", "9 + 1 + 3", "10 + 3", "13"],
+        "captions": ["原来的算式", "把 4 拆成 1 和 3", "9 和 1 凑成 10", "10 加 3 等于 13"]
+      },
+      "teacher_note": "让孩子跟着念一遍三句话"
+    },
+    {
+      "slide_id": "s5-practice-1",
+      "kind": "practice",
+      "title": "换你来：9 + 5 = ?",
+      "body": "9 还差几凑成 10？把 5 拆开试试。",
+      "visual": { "type": "ten_frame", "frames": [9, 5], "labels": ["9", "5"] },
+      "exercise": {
+        "prompt": "9 + 5 = ?",
+        "options": ["13", "14", "15"],
+        "answer_index": 1,
+        "hint": "9 差 1 满 10，所以把 5 拆成 1 和 4",
+        "explain": "9 + 1 = 10，10 + 4 = 14"
+      },
+      "teacher_note": "答错先给提示，不要直接给答案"
+    },
+    {
+      "slide_id": "s6-practice-2",
+      "kind": "practice",
+      "title": "再来一题：8 + 6 = ?",
+      "body": "这次是 8。8 差几才满 10？",
+      "visual": { "type": "ten_frame", "frames": [8, 6], "labels": ["8", "6"] },
+      "exercise": {
+        "prompt": "8 + 6 = ?",
+        "options": ["13", "14", "16"],
+        "answer_index": 1,
+        "hint": "8 差 2 满 10，把 6 拆成 2 和 4",
+        "explain": "8 + 2 = 10，10 + 4 = 14"
+      },
+      "teacher_note": "从 9 换到 8，检验孩子是不是真的会拆，而不是记住了「差 1」"
+    },
+    {
+      "slide_id": "s7-bond-practice",
+      "kind": "practice",
+      "title": "只拆不算：7 要凑成 10，差几？",
+      "body": "先别算加法，就想一件事：7 再添几个就满 10 了？",
+      "visual": { "type": "ten_frame", "frames": [7, 0], "labels": ["7", ""] },
+      "exercise": {
+        "prompt": "7 + ( ) = 10",
+        "options": ["2", "3", "4"],
+        "answer_index": 1,
+        "hint": "数一数十格阵里还空着几格",
+        "explain": "7 + 3 = 10，所以 7 差 3"
+      },
+      "teacher_note": "把「凑十」单独拎出来练，这是凑十法真正的难点"
+    },
+    {
+      "slide_id": "s8-summary",
+      "kind": "summary",
+      "title": "今天学会了什么",
+      "body": "凑十法三句话：\n看大数 —— 拆小数 —— 先凑十。\n\n以后遇到 9+几、8+几，都可以这么算。",
+      "visual": {
+        "type": "steps",
+        "steps": ["看大数", "拆小数", "先凑十"],
+        "captions": ["找出更接近 10 的那个", "把另一个拆成两半", "先凑满 10，再加剩下"]
+      },
+      "teacher_note": "结尾留一道回家题，不要多"
+    }
+  ]
+}

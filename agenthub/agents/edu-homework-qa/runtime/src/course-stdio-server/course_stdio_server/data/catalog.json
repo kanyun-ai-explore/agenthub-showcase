@@ -1,0 +1,43 @@
+{
+  "_localized": true,
+  "brand": "豆豆学堂",
+  "courses": [
+    {
+      "course_id": "math-g1-thinking",
+      "title": "一年级数学思维训练营",
+      "level": "A 班 · 零基础",
+      "grade": "一年级",
+      "sessions": 24,
+      "weeks": 12,
+      "price": 2680,
+      "original_price": 3280,
+      "highlights": [
+        "每周 2 次直播 + 录播回看，错过能补",
+        "凑十法、破十法、看图列式，按知识点排课",
+        "每节课后 5 道分层练习，批改助手当天反馈"
+      ],
+      "knowledge_points": ["20以内进位加法", "20以内退位减法", "图形认知", "认识时间"]
+    },
+    {
+      "course_id": "math-g1-advanced",
+      "title": "一年级数学思维训练营",
+      "level": "B 班 · 有基础",
+      "grade": "一年级",
+      "sessions": 24,
+      "weeks": 12,
+      "price": 2680,
+      "original_price": 3280,
+      "highlights": [
+        "入学摸底题分班，要求能做 20 以内不进位加法",
+        "同样 24 节，题目难度和节奏更快",
+        "含 4 次思维拓展专题"
+      ],
+      "knowledge_points": ["20以内进位加法", "简单应用题", "数图形", "推理入门"]
+    }
+  ],
+  "trial_slots": [
+    { "slot_id": "t-0914-1930", "date": "9 月 14 日（周二）", "time": "19:30 - 19:55", "teacher": "豆豆", "seats_left": 3 },
+    { "slot_id": "t-0917-1930", "date": "9 月 17 日（周五）", "time": "19:30 - 19:55", "teacher": "豆豆", "seats_left": 5 },
+    { "slot_id": "t-0921-1930", "date": "9 月 21 日（周二）", "time": "19:30 - 19:55", "teacher": "小林", "seats_left": 1 }
+  ]
+}

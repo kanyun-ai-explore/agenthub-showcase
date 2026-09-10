@@ -1,0 +1,95 @@
+apiVersion: agenthub/v1alpha1
+format: claude_code
+
+# 推理走项目级「模型服务」，密钥留在服务端，沙箱里只看得到本地代理。
+# model 显式钉死：不钉的话会落到平台默认通道的默认模型上，那个默认值是会变的。
+# CMA 上游自己的默认值（claude-sonnet-5）不适用于这套部署。
+modelService: model
+model: deepseek-v4-flash
+
+# 平台 Environment，把 CMA 的三方依赖固定版本烤进镜像
+# （pydantic / anthropic / mcp / pyyaml / httpx，版本见 README）。
+environment: cma-python
+
+# system prompt 不在这里：它是本目录的 CLAUDE.md，由 CMA 自己的 managed-agent
+# system prompt 推导而来，推导步骤见 runtime/scripts/derive-claude-md.md。
+
+# 没有 setupScriptFile。平台在沙箱**启动期**跑 setup 脚本，早于第一轮对话时才解压的
+# agent 包——所以 setup 脚本没法 pip install 本包自带的 vendored 代码（实测：每个
+# 会话都 SETUP_SCRIPT_FAILED，报 runtime/src/commerce-common 不存在）。
+# 三方依赖烤进 cma-python Environment，vendored 包改用下面 env 里的 PYTHONPATH
+# 直接可导入。scripts/setup.sh 只留给本地 `agenthub agent dev` 用。
+
+# serverKey 由 MCP 的 displayName slugify 而来，所以这个渲染成 `mcp__storefront__*`，
+# 也就是下面 allowedTools 引用的名字。id 写错不会被 `agenthub agent check` 抓到，
+# 只在流水线 freeze 时才报错。
+# ⚠️ 换成你自己控制面上注册的 managed MCP id。
+mcpServers:
+  - vcrd_PLACEHOLDER   # storefront stdio MCP (python3 -m storefront_stdio_server)
+
+agentOptions:
+  maxTurns: 16              # == CMA Agent SDK 路径的 max_turns=16
+  effort: low               # == CMA shopping 配置的 thinking_effort="low"
+  # 声明作者意图：这个 agent 只该用到 Skill 和 storefront MCP。
+  # 写 `mcp__storefront`（裸名，不带每工具后缀）而不是列出全部 20 个
+  # `mcp__storefront__<tool>`：裸名就是平台对一个已声明 MCP server 的基线粒度，
+  # 逐个列既冗余，又会在注册工具集变动时漂移。
+  #
+  # allowedTools 是配置期的意图声明与正确性检查；真正把内置工具从模型可见集合里
+  # 摘掉的是 disallowedTools，所以两个都写。内置工具集是固定可枚举的，这里写的是
+  # 上游 CMA `tools=["Skill"]` 的补集——上游用同一套 skills 和同一个 stdio server，
+  # 只挂 Skill 就能跑，这就是「这一族 agent 不需要任何内置工具」的阳性对照。
+  allowedTools: [Skill, mcp__storefront]
+  disallowedTools: [Read, Write, Edit, Bash, Grep, Glob, LS, WebFetch]
+
+env:
+  # 关扩展思考。只对 Anthropic 模型有效，对当前跑的 deepseek-v4-flash 是**惰性**的
+  # （留着是为了切回 claude 时不用改）。实测 CLI 拿到 MAX_THINKING_TOKENS=0 之后是
+  # 把 `thinking` 字段整个省略（默认为 `{"type":"adaptive"}`），而不是发
+  # `{"type":"disabled"}`；Anthropic 把「字段缺席」当作不思考，deepseek 侧把它当作
+  # 思考开启，所以这个 revision 的会话里仍然带 3-4 段 reasoning。要对 deepseek 真正
+  # 关掉，得让模型网关把「缺席」默认成 disabled，或者换非推理模型。
+  MAX_THINKING_TOKENS: "0"
+  # 让 `python3 -m storefront_stdio_server`（注册的 stdio MCP 命令）不经任何安装步骤
+  # 就能导入 vendored 包——见上面 setupScriptFile 的说明。路径是平台的 agent 包安装
+  # 根目录；这三个目录都是 src-layout，导入包（commerce_common / shopping_agent /
+  # storefront_stdio_server）直接坐在它们下面，所以不需要 build 也不需要 pip。
+  PYTHONPATH: "/workspace/.session/agent-package/runtime/src/commerce-common:/workspace/.session/agent-package/runtime/src/shopping-agent-core:/workspace/.session/agent-package/runtime/src/storefront-stdio-server"
+  CMA_BRAND_NAME: ACME
+  CMA_ASSISTANT_NAME: "ACME Assistant"
+  CMA_ENABLE_DISCLOSURES: "0"   # 默认关，与 CMA 上游默认一致。只把它翻成 "1" 还不够：
+                                # 后端 /api/backend/disclosure 对每个 id 都返回 null
+                                # （没有写任何 disclosure 固定数据），present_disclosure
+                                # 会注册成功然后拒绝每一次调用。要先补固定数据。
+  CMA_UI_DELIVERY: result_text  # 模式 A。模式 B（backend_post）已实现在
+                                # runtime/src/storefront-stdio-server，但没选中：
+                                # 没有后端时模式 B 会静默丢掉每一张卡片
+                                # （见 __main__.py 的 _post_ui_event：只 log 一次就
+                                # 返回，不回落到模式 A）。
+  # 不设这个值时，agent 跑的是内嵌 MockRetail + JsonFileMemoryStore——它自己的购物车，
+  # 关在沙箱里，网页看不见。实测过一次两个购物车并存：网页里加了商品，agent 回答
+  # 「你的购物车目前是空的」，而演示页正声称它们是同一个。
+  #
+  # 指向 storefront-web 之后，助手读写的就是手机 UI 那一个购物车、订单和偏好。身份能
+  # 对上是因为 HttpStorefrontBackend 把 CMA_END_USER_ID 作为 X-CMA-User 发出去，而
+  # 会话路由注入的 demo-user 也正是浏览器自己调用时 userIdFrom 的默认值。
+  #
+  # ⚠️ `/api` 后缀是契约的一部分（客户端 POST `<base>/cart/get`，路由在 /api 下面）。
+  # 换成你自己部署的 storefront-web 地址。
+  BACKEND_BASE_URL: https://<your-storefront-host>/api
+  # BACKEND_TOKEN 未设——本演示后端不需要鉴权。真实后端应该在这里以 secretRef 形式给。
+  #
+  # 默认身份，实际效果是「eval 会话的身份」——eval 不传 configValues，就落到这里；
+  # 网页访客由 storefront-web 按浏览器传入自己的 id，优先级更高。
+  #
+  # 绑上 BACKEND_BASE_URL 之后购物车变成共享且持久的资源。eval 原本继承 stdio server
+  # 自己的 demo-user 默认值，于是读到了演示页上别人留下的商品：某次 eval 里第三轮要求
+  # 「加入购物车」，模型调 get_cart 看到三件无关商品，整轮都在问「是指键盘吗」，始终
+  # 没调 add_to_cart。后端对未知 id 会继承演示人设的偏好和订单，所以这里不需要配套的
+  # 固定数据。
+  CMA_END_USER_ID: eval-user
+
+# 没有 memory 段：平台托管记忆不在本仓库的范围内。CMA 自己那层记忆
+# （save_memory / recall_memories / tier-one）照常跑，落在 stdio server 自己的
+# JsonFileMemoryStore（.session/cma-state/ 下），或者在 BACKEND_BASE_URL 设了之后
+# 走 HTTP MemoryStore 适配器打到同一个后端。
