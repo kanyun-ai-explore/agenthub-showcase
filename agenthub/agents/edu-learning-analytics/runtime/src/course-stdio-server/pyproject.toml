@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "course-stdio-server"
+version = "0.1.0.dev0"
+description = "stdio MCP server exposing 豆豆学堂 course/trial/report tools (fixed JSON+CSV data) to the AgentHub sandbox's Claude Code CLI. New code for this repo; pure stdlib plus the mcp SDK."
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "agenthub-showcase" }]
+# 每个工具都是固定签名，不包装上游 executor，所以只需要 mcp 和标准库。
+# <2 上界：本 server 用 FastMCP（mcp 2.x 已改名为 MCPServer 且 API 变动），
+# 必须保证全新安装解析到 1.x。
+dependencies = [
+  "mcp>=1.2,<2",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["course_stdio_server"]

@@ -1,0 +1,161 @@
+apiVersion: agenthub/v1alpha1
+kind: EvalSuite
+purpose: regression
+
+# Rewritten from CMA's own README "Try" prompts (M2 item 4), not the reproduction
+# plan's own acceptance-criteria language the first version of this file used —
+# see upstream .vendor-src/commerce-agents/examples/retail/README.md's "Try"
+# section (the "Storefront" three-turn flow and the single-prompt table). Same
+# catalog: examples/retail/data/catalog.json is the fixture both that README and
+# this package's embedded MockRetail read.
+#
+# 流水线的 `eval` 步骤需要 test 槽位上有一个已发布的版本，而这需要先建好
+# `cma-python` Environment 并注册 `storefront` managed MCP（仓库里 agent.yaml 的
+# mcpServers 是占位 id）。
+# 打分器故意全用确定性的（transcript / reply），不用 `llm` grader；这些用例覆盖的
+# 工具层，离线部分已由 runtime/tests/smoke_stdio.py 和 smoke_http_backend.py 验过。
+
+cases:
+  - id: readme-camping-trip-flow
+    description: >-
+      README's three-turn storefront flow verbatim: a bounded family-camping ask,
+      a comparison of the top two results, then a cart add plus a returns
+      question in the same turn — covers search -> present -> compare ->
+      cross-turn add -> policy grounding in one conversation.
+    turns:
+      - user: >-
+          I'm taking my partner and our 6-year-old camping for the first time
+          next month. We need a tent — nothing too heavy to deal with, ideally
+          under ¥1800.
+      - user: "Compare the top two options for me — mostly care about space and ease of setup."
+      - user: "The family one sounds right. Add it to my cart, and remind me what returns look like just in case."
+    allowStdioMcp: true  # this agent's MCP server (storefront) is stdio-transport
+    graders:
+      - type: transcript
+        label: searched-and-presented
+        severity: gate
+        expect:
+          completed: true
+          calledTool: { name: mcp__storefront__search_products, times: ">=1" }
+      - type: transcript
+        label: compared
+        severity: gate
+        expect:
+          calledTool: { name: mcp__storefront__present_comparison, times: ">=1" }
+      - type: transcript
+        label: cross-turn-add-succeeded
+        severity: gate
+        expect:
+          calledTool: { name: mcp__storefront__add_to_cart, times: ">=1" }
+      - type: transcript
+        label: policy-tool-called
+        severity: gate
+        expect:
+          calledTool: { name: mcp__storefront__search_policies, times: ">=1" }
+
+  - id: readme-reorder-from-history
+    description: "README single prompt: a reorder-by-memory request resolves through order history, not search, and the price difference is called out."
+    turns:
+      - user: "Order me the same resistance band set I bought from you before."
+    allowStdioMcp: true  # this agent's MCP server (storefront) is stdio-transport
+    graders:
+      - type: transcript
+        label: order-history-checked
+        severity: gate
+        expect:
+          completed: true
+          calledTool: { name: mcp__storefront__get_orders, times: ">=1" }
+      - type: transcript
+        label: added-from-order-not-search
+        severity: gate
+        expect:
+          calledTool: { name: mcp__storefront__add_to_cart, times: ">=1" }
+      - type: reply
+        label: price-difference-named
+        severity: soft
+        expect:
+          matches: "[Pp]rice|now|today|since"
+
+  - id: readme-return-window-closed
+    description: "README single prompt: a return eligibility question is answered from the order's delivery date plus the returns policy, not the model's own assumption, and no return is opened."
+    turns:
+      - user: "Can I still return the yoga mat I ordered from you a while back? It's unused."
+    allowStdioMcp: true  # this agent's MCP server (storefront) is stdio-transport
+    graders:
+      - type: transcript
+        label: order-and-policy-grounded
+        severity: gate
+        expect:
+          completed: true
+          calledTool: { name: mcp__storefront__get_orders, times: ">=1" }
+      - type: transcript
+        label: policy-checked
+        severity: gate
+        expect:
+          calledTool: { name: mcp__storefront__search_policies, times: ">=1" }
+      - type: reply
+        label: no-return-opened
+        severity: soft
+        expect:
+          excludes: "return has been"
+
+  - id: readme-single-search-no-clarification
+    description: "README single prompt: a specific, unambiguous need returns one search and one product card with no clarifying question."
+    turns:
+      - user: "I need a universal travel adapter that can charge a laptop."
+    allowStdioMcp: true  # this agent's MCP server (storefront) is stdio-transport
+    graders:
+      - type: transcript
+        label: single-search
+        severity: gate
+        expect:
+          completed: true
+          calledTool: { name: mcp__storefront__search_products, times: "1" }
+      - type: transcript
+        label: presented
+        severity: gate
+        expect:
+          calledTool: { name: mcp__storefront__present_products, times: ">=1" }
+      - type: reply
+        label: no-clarifying-question
+        severity: soft
+        expect:
+          excludes: "?"
+
+  - id: readme-budget-plan
+    description: "README single prompt: a multi-item plan under a stated budget totals the picks and names what to cut when it is over, rather than silently exceeding it."
+    turns:
+      - user: >-
+          Two couples, first weekend of car camping, and no gear between us.
+          Put together what we need and keep the whole list under ¥4000.
+    allowStdioMcp: true  # this agent's MCP server (storefront) is stdio-transport
+    graders:
+      - type: transcript
+        label: plan-presented
+        severity: gate
+        expect:
+          completed: true
+          calledTool: { name: mcp__storefront__present_plan, times: ">=1" }
+      - type: reply
+        label: budget-named
+        severity: soft
+        expect:
+          matches: "4000|¥|[Bb]udget|over"
+
+  - id: provenance-gate-self-corrects
+    description: "Adding a product_id the model invented (never returned by a tool this session) is held by the provenance gate, and the model resolves it rather than giving up or fabricating success."
+    turns:
+      - user: "Add product XX-9999 to my cart."
+    allowStdioMcp: true  # this agent's MCP server (storefront) is stdio-transport
+    graders:
+      - type: transcript
+        label: attempted-and-recovered
+        severity: gate
+        expect:
+          completed: true
+          calledTool: { name: mcp__storefront__add_to_cart, times: ">=1" }
+      - type: reply
+        label: no-false-success-claim
+        severity: soft
+        expect:
+          excludes: "has been added"

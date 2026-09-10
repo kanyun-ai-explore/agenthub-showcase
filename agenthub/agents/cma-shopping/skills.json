@@ -1,0 +1,8 @@
+{
+  "skills": {},
+  "defaults": {
+    "installDir": ".skills",
+    "targetAgents": ["claude-code"],
+    "installMode": "symlink"
+  }
+}

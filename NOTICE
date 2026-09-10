@@ -1,0 +1,135 @@
+agenthub-showcase
+Copyright the contributors.
+
+This repository vendors source from:
+
+  anthropics/commerce-agents
+  https://github.com/anthropics/commerce-agents
+  Commit: fd4d59224ab96b43c6dc6888207c67b3bd5a24cf
+  License: Apache License 2.0 (see LICENSE)
+  Copyright 2026 Anthropic PBC
+
+The copy is performed by `scripts/vendor-cma.sh` (re-runnable, reads a local clone
+of upstream from a gitignored `.vendor-src/`), followed by
+`scripts/localize-fixtures.py`. This file records what came from upstream and, per
+Apache License 2.0 §4(b), which of those files carry modifications.
+
+--------------------------------------------------------------------------------
+1. Vendored destinations
+--------------------------------------------------------------------------------
+
+Upstream source is copied into THREE places, because each agent package must be
+independently deployable (the sandbox only has that one package's own tree) and the
+web app needs the same fixtures:
+
+  A. agenthub/agents/cma-shopping/runtime/src/
+       commerce-common/          <- commerce-common/
+       shopping-agent-core/      <- shopping-agent/core/
+       storefront-stdio-server/  <- NEW code (this repo), which vendors a slice of
+                                    upstream examples/ as package data under
+                                    storefront_stdio_server/_examples/
+
+  B. agenthub/agents/cma-merchant/runtime/src/
+       commerce-common/          <- commerce-common/          (second copy)
+       shopping-agent-core/      <- shopping-agent/core/      (second copy;
+                                    MockRetailMerchant wraps a MockRetail instance)
+       merchant-agent-core/      <- merchant-agent/core/
+       merchant-stdio-server/    <- NEW code (this repo), which vendors a slice of
+                                    upstream examples/ as package data under
+                                    merchant_stdio_server/_examples/
+
+  C. apps/storefront-web/data/retail/
+       catalog.json, orders.json, policies.json, users.json  <- examples/retail/data/
+
+Not vendored anywhere: runtime-agent-sdk, runtime-messages-api, the example FastAPI
+hosts, and the parts of examples/ none of the above needs.
+
+--------------------------------------------------------------------------------
+2. Byte-identical to upstream
+--------------------------------------------------------------------------------
+
+  agenthub/agents/cma-merchant/runtime/src/commerce-common/
+  agenthub/agents/cma-merchant/runtime/src/shopping-agent-core/
+  agenthub/agents/cma-merchant/runtime/src/merchant-agent-core/
+  examples/retail/api/mock_retail.py          (both stdio-server packages)
+  examples/demo_common/storefront_fixtures.py (both stdio-server packages)
+
+Everything vendored and not listed in section 3 is byte-identical.
+
+--------------------------------------------------------------------------------
+3. Modified files (Apache License 2.0 §4(b))
+--------------------------------------------------------------------------------
+
+3.1 Carried presentation chips — agenthub/agents/cma-shopping/runtime/src/
+
+  commerce-common/commerce_common/presentation.py
+  commerce-common/commerce_common/turn.py
+  shopping-agent-core/shopping_agent/tools/registry.py
+
+  A turn's suggestion chips ride along on the turn's last presentation component
+  (a shared `suggestions` field, lifted into a second `ui` event) instead of
+  costing a model round of their own. This saves one round trip per turn on a
+  latency-sensitive demo. cma-merchant's copies of the same two packages are NOT
+  modified.
+
+3.2 Package-data stubs — both stdio-server packages
+
+  _examples/demo_common/__init__.py
+  _examples/retail/__init__.py
+
+  Both REPLACED with empty stubs. Upstream's real `__init__.py` re-exports modules
+  that pull in the CMA example FastAPI host and the merchant runtime; neither is
+  needed to run `MockRetail`, and importing them would make these packages depend
+  on trees this repo deliberately does not vendor. This is the one packaging
+  exception that lets `mock_retail.py` and `storefront_fixtures.py` stay unedited.
+
+3.3 Localized fixtures — all three destinations (A, B and C above)
+
+  retail/data/*.json
+
+  Rewritten by `scripts/localize-fixtures.py` after every vendor run: amounts
+  converted to CNY, a language preference added to demo-user. The script is
+  idempotent (it recognizes a `_localized` marker), so re-running vendor + localize
+  does not double-convert. Do not hand-edit these files — the next vendor run
+  overwrites them.
+
+  Upstream fixtures NOT copied: memory-seed.json everywhere, and the merchant_*.json
+  files in destinations A and C (shopping-only scope there).
+
+3.4 Skills — 10 files
+
+  agenthub/agents/cma-shopping/.claude/skills/*/SKILL.md   (5, from shopping-agent/skills/)
+  agenthub/agents/cma-merchant/.claude/skills/*/SKILL.md   (5, from merchant-agent/skills/)
+
+  Light edits: tool-name annotations, `web_search` references removed. Each file's
+  own header records what changed.
+
+3.5 Derived system prompts
+
+  agenthub/agents/cma-shopping/CLAUDE.md
+  agenthub/agents/cma-merchant/CLAUDE.md
+
+  Derived from upstream's managed-agent `system.md`. The derivation is re-runnable
+  and its steps are recorded in each package's
+  `runtime/scripts/derive-claude-md.{md,py}`; upstream's original is committed
+  alongside under `runtime/scripts/_vendor-reference/`.
+
+--------------------------------------------------------------------------------
+4. Known-stale cross references
+--------------------------------------------------------------------------------
+
+`commerce-common/README.md` and `shopping-agent-core/README.md` are vendored
+unmodified along with their packages and (accurately, for upstream's own full
+monorepo) reference sibling directories this repo does not vendor
+(`../runtime-messages-api/`, `../managed-agents/`, `../../docs/backends.md`, …).
+Expected, not broken links in this repo.
+
+--------------------------------------------------------------------------------
+5. Everything else
+--------------------------------------------------------------------------------
+
+The rest of this repository is original work: the Next.js app under
+`apps/storefront-web/`, the two stdio MCP servers, the course MCP
+(`shared/course-stdio-server/` and its TypeScript port in the web app), all seven
+`agent.yaml` files, `evals/`, and the scripts under `scripts/`. Licensed under the
+same Apache License 2.0 for consistency with the vendored material (see LICENSE).
