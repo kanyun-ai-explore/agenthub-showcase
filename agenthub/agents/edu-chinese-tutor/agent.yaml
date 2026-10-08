@@ -1,8 +1,10 @@
 apiVersion: agenthub/v1alpha1
 format: claude_code
 
-# 上游 course-ai-team-demo 用的是 claude-sonnet-5；本仓库统一跑同一个模型，
-# 与电商两个 agent 保持一致。
+# 上游 course-ai-team-demo 用的是 claude-sonnet-5；本仓库统一走项目级「模型服务」`model`，
+# 与电商两个 agent 一致。密钥留在服务端，沙箱里只看得到本地代理。
+# 这里的 `model` 会盖掉服务里配的模型，所以要写模型服务认得的 id。
+modelService: model
 model: deepseek-v4-flash
 
 # system prompt 在同目录的 CLAUDE.md（claude_code 格式的约定文件）。

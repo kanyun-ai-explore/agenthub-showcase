@@ -15,8 +15,8 @@ importers:
   apps/storefront-web:
     dependencies:
       '@kanyun-ai-infra/agenthub':
-        specifier: ^1.8.0
-        version: 1.8.0
+        specifier: ^1.10.0
+        version: 1.10.0
       next:
         specifier: 16.2.6
         version: 16.2.6(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -182,8 +182,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@kanyun-ai-infra/agenthub@1.8.0':
-    resolution: {integrity: sha512-Ghpt8aswouqHT9Q6jgKqh3070VyOXMg/HeeTZ/kheXQ/fvCSQ2QlRwiLb7EUPDKs99nKIK5/i5C4e6H62T1JXA==}
+  '@kanyun-ai-infra/agenthub@1.10.0':
+    resolution: {integrity: sha512-U5dAudPoDw3CKhOTA2mjz2v+2g/knAhzpqqPV2Xyrn7g86iqlhJ4MxMb98ALFrS9IwnVOGcD6gDVlvCwB/P2sQ==}
 
   '@next/env@16.2.6':
     resolution: {integrity: sha512-gd8HoHN4ufj73WmR3JmVolrpJR47ILK6LouP5xElPglaVxir6e1a7VzvTvDWkOoPXT9rkkTzyCxBu4yeZfZwcw==}
@@ -491,7 +491,7 @@ snapshots:
   '@img/sharp-win32-x64@0.34.5':
     optional: true
 
-  '@kanyun-ai-infra/agenthub@1.8.0':
+  '@kanyun-ai-infra/agenthub@1.10.0':
     dependencies:
       zod: 4.5.4
 

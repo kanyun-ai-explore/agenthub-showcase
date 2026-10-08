@@ -17,6 +17,8 @@ const AGENT_ENV: Record<string, string> = {
   "chinese-tutor": "AGENTHUB_CHINESE_TUTOR_AGENT_ID",
   "homework-qa": "AGENTHUB_HOMEWORK_QA_AGENT_ID",
   "learning-analytics": "AGENTHUB_LEARNING_ANALYTICS_AGENT_ID",
+  "english-coach": "AGENTHUB_ENGLISH_COACH_AGENT_ID",
+  roleplay: "AGENTHUB_ROLEPLAY_AGENT_ID",
 };
 
 export type AgentKey = keyof typeof AGENT_ENV | (string & {});

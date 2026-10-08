@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "AgentHub Showcase",
-  description: "在 AgentHub 上真实跑起来的 agent：电商导购与商家助手、在线教育的 AI 教研团队。",
+  description: "在 AgentHub 上真实运行的 Agent：电商导购与商家助手、在线教育的 AI 教研团队、语言学习的英语小课与情景对话。",
 };
 
 export default function Home() {
@@ -40,8 +40,7 @@ export default function Home() {
               产品的一部分来交付
             </h1>
             <p>
-              下面每个场景都是真的在跑：Agent 的定义是仓库里的文件，走流水线发布；它在隔离沙箱里调用真实的业务工具，
-              用生成式 UI 把结果渲染成能看能点的界面。手机可以真的点，旁边写明这一幕用到了平台的哪些能力、每条在仓库里的出处。
+              下面每个场景都在真实运行：Agent 的定义是仓库里的文件，经流水线发布；它在隔离沙箱里调用真实的业务工具，再用生成式 UI 把结果渲染成可以查看和操作的界面。手机可以直接操作，旁边写明这一幕用到了平台的哪些能力，以及每项能力在仓库里的出处。
             </p>
             <div className="hero-actions">
               <a className="btn btn-primary btn-lg" href={`/showcase/${SCENARIOS[0].id}`}>
@@ -65,7 +64,7 @@ export default function Home() {
         <section className="sec">
           <div className="sec-head">
             <h2>场景</h2>
-            <span>每个场景是一组分工不同的 Agent，点进去就能上手</span>
+            <span>每个场景由一组分工不同的 Agent 组成，点进去即可操作</span>
           </div>
           <div className="scen-grid">
             {SCENARIOS.map((scenario) => (
@@ -93,7 +92,7 @@ export default function Home() {
 
         <section className="sec">
           <div className="sec-head">
-            <h2>平台在这类场景里给你的</h2>
+            <h2>平台在这类场景里提供的能力</h2>
           </div>
           <div className="ext-grid" data-cols="4">
             {PLATFORM_EXTENSIONS.map((ext) => (
@@ -108,7 +107,7 @@ export default function Home() {
         <section className="sec">
           <div className="sec-head">
             <h2>从这里开始</h2>
-            <span>文档、SDK，以及这个页面自己的源码</span>
+            <span>文档、SDK 和本页面的源码</span>
           </div>
           <div className="links" data-cols="2">
             {DOC_LINKS.map((link) => (

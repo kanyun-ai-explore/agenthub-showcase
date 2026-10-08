@@ -61,6 +61,12 @@ const KNOWN_COMPONENTS: ReadonlySet<string> = new Set([
   "report",
   "slide",
   "exercise",
+  // 英语小课：一关的题（present_lesson），以及单题工具的四类题（跟读那张走平台的语音回合）
+  "lesson",
+  "listen_choice",
+  "word_bank",
+  "fill_blank",
+  "read_aloud",
   // 通用
   "suggestions",
 ]);

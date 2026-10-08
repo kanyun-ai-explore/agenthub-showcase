@@ -14,15 +14,17 @@ import {
   type Conversation,
   type PrewarmSignal,
 } from "@/components/agent/useAgentConversation";
-import { CAPABILITIES, type CapabilitySignal } from "@/lib/showcase/capabilities";
+import { CAPABILITIES, type CapabilityId, type CapabilitySignal } from "@/lib/showcase/capabilities";
 import { PLATFORM_EXTENSIONS, type Scenario, type Surface } from "@/lib/showcase/cases";
 import { readPrewarmHandle, writePrewarmHandle } from "@/lib/agenthub/prewarm-handle";
-import { DOC_LINKS, GETTING_STARTED } from "@/lib/showcase/links";
+import { DOC_LINKS, GETTING_STARTED, repoFileHref } from "@/lib/showcase/links";
 import { readVisitorId, rememberVisitorId, resetVisitorId } from "@/lib/showcase/visitor";
 import { ShoppingApp } from "@/components/mobile/ShoppingApp";
 import { MerchantApp } from "@/components/mobile/MerchantApp";
 import { WeChatApp } from "@/components/mobile/WeChatApp";
 import { ClassroomApp } from "@/components/mobile/ClassroomApp";
+import { EnglishCourseApp } from "@/components/mobile/EnglishCourseApp";
+import { RoleplayApp } from "@/components/mobile/RoleplayApp";
 import type { Lesson } from "@/lib/course/types";
 import { Footer } from "./Chrome";
 import { Code } from "./Code";
@@ -42,15 +44,39 @@ interface LiveEvent {
 }
 
 // 按一轮真实发生的顺序排：流式在第一个 present_* 之前就开始了。
-const STEPS: { signal: CapabilitySignal | PrewarmSignal; label: string; hint: string }[] = [
+// 带 `caps` 的步骤只在声明了对应能力的视角上出现——语音回合这条挂到别的视角上，
+// 会永远停在「未发生」，那块时间线就成了替它吹的牛。同理，`format: live` 的视角
+// （没有沙箱、没有工具、没有生成式 UI）也不该摆着那三步等它永远不亮。
+const STEPS: {
+  signal: CapabilitySignal | PrewarmSignal;
+  label: string;
+  hint: string;
+  caps?: CapabilityId[];
+}[] = [
   { signal: "session-created", label: "创建会话", hint: "sessions.create，带上这次的身份配置" },
-  { signal: "sandbox-ready", label: "沙箱就绪", hint: "拉起隔离容器，装载 Agent 的文件定义" },
-  { signal: "prewarm-hit", label: "预热命中", hint: "复用为同一学生预建的会话，跳过冷启" },
-  { signal: "prewarm-miss", label: "预热未命中", hint: "预建会话已失效，退回正常冷启" },
-  { signal: "prewarm-started", label: "预热其它课", hint: "为同一访客预建其它 agent 的会话" },
-  { signal: "stream-chunk", label: "流式输出", hint: "SSE 逐字回传，断线带游标续上" },
-  { signal: "tool-call", label: "调用工具", hint: "经托管 MCP 打到真实业务能力" },
-  { signal: "present-card", label: "生成式 UI", hint: "返回结构化组件数据，前端渲染成卡片" },
+  {
+    signal: "sandbox-ready",
+    label: "沙箱就绪",
+    hint: "拉起隔离容器，装载 Agent 的文件定义",
+    caps: ["sandbox"],
+  },
+  { signal: "prewarm-hit", label: "预热命中", hint: "复用为同一学生预建的会话，跳过冷启动" },
+  { signal: "prewarm-miss", label: "预热未命中", hint: "预建会话已失效，改走正常冷启动" },
+  { signal: "prewarm-started", label: "预热其他课", hint: "为同一访客预建其他 Agent 的会话" },
+  { signal: "stream-chunk", label: "流式输出", hint: "SSE 逐字回传，断线后带游标续上" },
+  { signal: "tool-call", label: "调用工具", hint: "经托管 MCP 调用真实的业务能力", caps: ["mcp"] },
+  {
+    signal: "present-card",
+    label: "生成式 UI",
+    hint: "返回结构化组件数据，前端渲染成卡片",
+    caps: ["generative-ui"],
+  },
+  {
+    signal: "voice-turn",
+    label: "语音回合",
+    hint: "录音 → 平台转写 → Agent 拿到文本，和打字输入的一样",
+    caps: ["voice-turn"],
+  },
 ];
 
 /** 微信会话页顶上显示的联系人。 */
@@ -68,11 +94,12 @@ function Check() {
   );
 }
 
-function statusOf(c: Conversation): { tone: "idle" | "busy" | "ok" | "bad"; text: string } {
+/** `sandbox`：这个视角的 agent 有没有沙箱（live 视角没有，不能说「沙箱启动中」）。 */
+function statusOf(c: Conversation, sandbox: boolean): { tone: "idle" | "busy" | "ok" | "bad"; text: string } {
   switch (c.phase) {
     case "creating":
     case "starting":
-      return { tone: "busy", text: `沙箱启动中 · ${c.elapsed}s` };
+      return { tone: "busy", text: sandbox ? `沙箱启动中 · ${c.elapsed}s` : `会话建立中 · ${c.elapsed}s` };
     case "reviving":
       return { tone: "busy", text: "会话被回收过，正在恢复" };
     case "ready":
@@ -121,6 +148,8 @@ export function CaseStage({
       );
     },
     onSettled: () => setSettleToken((v) => v + 1),
+    // 英语课冷启时孩子在等第一关，就绪轮询间隔直接叠在等待上；其它视角不变。
+    readyPollMs: surface.app === "english" ? 300 : undefined,
   });
 
   const visitorId = conversation.userId ?? localVisitorId;
@@ -176,9 +205,14 @@ export function CaseStage({
     }
   }, [conversation.phase, visitorId, surface.prewarm]);
   const seen = useMemo(() => new Map(events.map((e) => [e.signal, e])), [events]);
+  // 时间线按视角裁剪：语音回合那条只出现在声明了它的视角上（见 STEPS 上的注释）。
+  const steps = useMemo(
+    () => STEPS.filter((step) => !step.caps || step.caps.some((cap) => surface.capabilities.includes(cap))),
+    [surface.capabilities],
+  );
   const first = events.length > 0 ? events[0].at : 0;
   const toolNames = useMemo(() => (tools.length > 0 ? tools.join(" · ") : null), [tools]);
-  const status = statusOf(conversation);
+  const status = statusOf(conversation, surface.capabilities.includes("sandbox"));
   const agentId = surface.meta.find((m) => m.label === "Agent")?.value;
 
   return (
@@ -196,6 +230,10 @@ export function CaseStage({
             />
           ) : surface.app === "classroom" ? (
             <ClassroomApp conversation={conversation} openers={surface.openers} lessonTitle={surface.lessonTitle ?? lesson?.title ?? "数学课"} teacherName={surface.teacherName} welcomeText={surface.welcomeText} />
+          ) : surface.app === "english" ? (
+            <EnglishCourseApp conversation={conversation} openers={surface.openers} visitorId={visitorId} lessonTitle={surface.lessonTitle} teacherName={surface.teacherName} welcomeText={surface.welcomeText} />
+          ) : surface.app === "roleplay" ? (
+            <RoleplayApp conversation={conversation} openers={surface.openers} visitorId={visitorId} sceneTitle={surface.lessonTitle} clerkName={surface.teacherName} welcomeText={surface.welcomeText} />
           ) : (
             <ShoppingApp
               conversation={conversation}
@@ -240,13 +278,13 @@ export function CaseStage({
 
           <section className="sec">
             <div className="sec-head">
-              <h2>正在发生</h2>
-              <span>{events.length === 0 ? "打开手机里的 Agent 后逐步点亮" : "本次会话的真实事件"}</span>
+              <h2>会话时间线</h2>
+              <span>{events.length === 0 ? "打开手机里的 Agent 后逐步点亮" : "本次会话真实发生的事件"}</span>
             </div>
             <ol className="tl">
-              {STEPS.map((step, index) => {
+              {steps.map((step, index) => {
                 const event = seen.get(step.signal);
-                const laterSeen = STEPS.slice(index + 1).some((s) => seen.has(s.signal));
+                const laterSeen = steps.slice(index + 1).some((s) => seen.has(s.signal));
                 const state = event ? (laterSeen ? "done" : "active") : "idle";
                 const detail =
                   event && step.signal === "session-created" && conversation.sessionId
@@ -268,12 +306,25 @@ export function CaseStage({
                 );
               })}
             </ol>
+            {conversation.sessionId && conversation.portalHref ? (
+              <a
+                className="tl-open"
+                href={conversation.portalHref}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <span className="tl-open-title">在 AgentHub 控制台打开这个会话 ↗</span>
+                <span className="tl-open-sub">
+                  平台记录了每轮的输入输出与工具调用、思考片段、token 用量与成本估算、trace、产物文件和上下文占用
+                </span>
+              </a>
+            ) : null}
           </section>
 
           <section className="sec">
             <div className="sec-head">
               <h2>用到的平台能力</h2>
-              <span>亮起的是这次会话里真的发生过的</span>
+              <span>亮起的是本次会话里实际发生过的</span>
             </div>
             <div className="caps">
               {surface.capabilities.map((id) => {
@@ -292,7 +343,9 @@ export function CaseStage({
                       {live ? <span className="cap-flag">已发生</span> : null}
                     </div>
                     <p>{capability.blurb}</p>
-                    <code>{capability.evidence}</code>
+                    <code>
+                      <Evidence text={capability.evidence} />
+                    </code>
                   </div>
                 );
               })}
@@ -301,10 +354,12 @@ export function CaseStage({
 
           <section className="sec">
             <div className="sec-head">
-              <h2>怎么做到的</h2>
-              <span>三步，这个页面本身就是这么接的</span>
+              <h2>实现方式</h2>
+              <span>三步，这个页面就是这样接入的</span>
             </div>
-            <Code title={surface.agentFile}>{surface.snippet}</Code>
+            <Code title={surface.agentFile} href={repoFileHref(surface.agentFile)}>
+              {surface.snippet}
+            </Code>
             <ol className="steps">
               {GETTING_STARTED.map((step, index) => (
                 <li className="step" key={step.title}>
@@ -321,7 +376,7 @@ export function CaseStage({
 
           <section className="sec">
             <div className="sec-head">
-              <h2>同一套东西还能这样用</h2>
+              <h2>同一套能力的其他用法</h2>
               <span>换工具、换提示词，不换平台</span>
             </div>
             <div className="ext-grid">
@@ -337,7 +392,7 @@ export function CaseStage({
           <section className="sec">
             <div className="sec-head">
               <h2>从这里开始</h2>
-              <span>文档、SDK，以及这个页面自己的源码</span>
+              <span>文档、SDK 和本页面的源码</span>
             </div>
             <div className="links">
               {DOC_LINKS.map((link) => (
@@ -358,3 +413,27 @@ export function CaseStage({
     </>
   );
 }
+
+/**
+ * 能力卡片底下那行「出处」。只有以 `agenthub/` 开头的才是仓库路径，渲染成跳到公开仓库
+ * 对应文件的链接；`a/b/agent.yaml + CLAUDE.md` 这种写法，后面的文件名落在前一个的目录里。
+ * 其它出处（工具名、env 变量、模型名）是文案，原样输出。
+ */
+function Evidence({ text }: { text: string }) {
+  if (!text.startsWith("agenthub/")) return <>{text}</>;
+  const parts = text.split(" + ");
+  const dir = parts[0].slice(0, parts[0].lastIndexOf("/") + 1);
+  return (
+    <>
+      {parts.map((part, i) => (
+        <span key={part}>
+          {i > 0 ? " + " : null}
+          <a href={repoFileHref(part.includes("/") ? part : `${dir}${part}`)} target="_blank" rel="noreferrer">
+            {part}
+          </a>
+        </span>
+      ))}
+    </>
+  );
+}
+

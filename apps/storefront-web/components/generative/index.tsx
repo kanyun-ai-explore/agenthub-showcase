@@ -78,12 +78,12 @@ export function GenerativeCard({
       return (
         <div className="g-card">
           <div className="g-card-head">
-            <b>组件 “{component}” 还没有渲染实现</b>
+            <b>组件「{component}」还没有渲染实现</b>
             <span className="g-kind">unknown</span>
           </div>
           <div className="g-body">
             <div style={{ fontSize: 11.5, color: "#7b808a", lineHeight: 1.6, marginBottom: 6 }}>
-              Agent 返回了这个组件，但前端没有对应的卡片。数据在下面，加一个渲染器就能显示 —— 它不会被悄悄丢掉。
+              Agent 返回了这个组件，但前端没有对应的卡片。数据在下面，加一个渲染器就能显示，数据不会被悄悄丢掉。
             </div>
             <pre className="g-diff" style={{ margin: 0, whiteSpace: "pre-wrap", maxHeight: 160, overflow: "auto" }}>
               {JSON.stringify(payload, null, 2).slice(0, 1200)}

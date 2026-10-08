@@ -191,6 +191,84 @@ function obj(
 // 每个 handler 自己按 inputSchema 取字段；给每个工具单独造类型只是噪音。
 type Args = any;
 
+// ---------------------------------------------------------------------------
+// 英语小课四类题的 payload 整形。单题工具（present_listen_choice …）与整关的
+// present_lesson 共用这一张表：同一道题不管从哪条路出，前端拿到的形状都一样。
+// 规则同其它展示工具：必填项原样带上，可选项「真值才写」（空串不进 payload）。
+// Python 侧 `_EXERCISE_FIELDS` 是同一张表，scripts/course-mcp-parity 对拍。
+// ---------------------------------------------------------------------------
+
+export const EXERCISE_FIELDS = {
+  listen_choice: { required: ["audio_text", "options", "answer_index"], optional: ["prompt", "hint", "explain"] },
+  word_bank: { required: ["prompt", "bank", "answer"], optional: ["hint", "explain"] },
+  fill_blank: { required: ["sentence", "options", "answer_index"], optional: ["prompt", "hint", "explain"] },
+  read_aloud: { required: ["text"], optional: ["prompt", "hint", "explain"] },
+} as const;
+
+export type ExerciseType = keyof typeof EXERCISE_FIELDS;
+
+/** 一关最多几道。CLAUDE.md 让它出 8 道，这里只挡明显失控的长度，不卡死 8。 */
+export const LESSON_MAX_EXERCISES = 12;
+
+function isExerciseType(value: unknown): value is ExerciseType {
+  return typeof value === "string" && Object.hasOwn(EXERCISE_FIELDS, value);
+}
+
+function exercisePayload(type: ExerciseType, a: Args): Record<string, unknown> {
+  const { required, optional } = EXERCISE_FIELDS[type];
+  const payload: Record<string, unknown> = {};
+  for (const key of required) payload[key] = a?.[key];
+  for (const key of optional) if (a?.[key]) payload[key] = a[key];
+  return payload;
+}
+
+/**
+ * present_lesson 的校验 + 整形。只挡「前端根本画不出来」的那几种（不是数组、题型不认识、
+ * 缺必填字段），一次把所有问题列全——agent 按报错整关重调一次就能改好，不用来回试。
+ * 选项下标越界、answer 不在 bank 里这类内容错误不在这里挡：前端渲染前会跳过画不了的题。
+ */
+function lessonPayload(a: Args): Record<string, unknown> {
+  const raw: unknown = a?.exercises;
+  if (!Array.isArray(raw) || raw.length === 0) {
+    throw new Error("present_lesson 没有出成：exercises 必须是非空数组。");
+  }
+  if (raw.length > LESSON_MAX_EXERCISES) {
+    throw new Error(`present_lesson 没有出成：一关最多 ${LESSON_MAX_EXERCISES} 道，这次给了 ${raw.length} 道。`);
+  }
+  const problems: string[] = [];
+  const exercises: Record<string, unknown>[] = [];
+  raw.forEach((item: unknown, i: number) => {
+    const n = i + 1;
+    if (typeof item !== "object" || item === null || Array.isArray(item)) {
+      problems.push(`第 ${n} 道不是对象`);
+      return;
+    }
+    const fields = item as Record<string, unknown>;
+    if (!isExerciseType(fields.type)) {
+      problems.push(`第 ${n} 道的 type 不认识（只能是 listen_choice / word_bank / fill_blank / read_aloud）`);
+      return;
+    }
+    const type = fields.type;
+    const missing = EXERCISE_FIELDS[type].required.filter((key) => fields[key] === undefined || fields[key] === null);
+    if (missing.length > 0) {
+      problems.push(`第 ${n} 道（${type}）缺 ${missing.join(", ")}`);
+      return;
+    }
+    exercises.push({ type, ...exercisePayload(type, fields) });
+  });
+  if (problems.length > 0) {
+    throw new Error(`present_lesson 没有出成：${problems.join("；")}。改好后整关重新调一次。`);
+  }
+  const payload: Record<string, unknown> = { exercises };
+  if (a.title) payload.title = a.title;
+  if (a.focus) payload.focus = a.focus;
+  // 分批出的一关：同一个 lesson_id，batch 从 1 数，batches 是一共几批。页面拿到第一批就开答。
+  if (a.lesson_id) payload.lesson_id = a.lesson_id;
+  if (Number.isInteger(a.batch) && a.batch >= 1) payload.batch = a.batch;
+  if (Number.isInteger(a.batches) && a.batches >= 1) payload.batches = a.batches;
+  return payload;
+}
+
 export const COURSE_TOOLS: McpTool[] = [
   {
     name: "get_lesson",
@@ -379,6 +457,141 @@ visual  这道题配的教具，可选。
       return envelope("exercise", payload);
     },
   },
+  // -------------------------------------------------------------------------
+  // 英语小课的题。形状由 `EnglishCourseApp` 渲染：听音选词 / 拼句 / 填空三张点选题，
+  // 加一张跟读题（跟读走平台的语音回合，前端的比对见 `lib/course/read-aloud.ts`）。
+  // 课程页按「一关」出题：agent 调一次 present_lesson 把整关题目交过来；四个单题工具
+  // 保留，别的教育 agent 和旧版本的英语 agent 仍在用，页面也认它们（见 lib/course/english-lesson.ts）。
+  // 和 present_exercise 一样是「题」，所以 hint / explain 的语义完全一致——
+  // 答错先给小提示，答对才显示解释；具体表扬留给 agent 的正文，不写死在卡里。
+  // -------------------------------------------------------------------------
+  {
+    name: "present_listen_choice",
+    description: `出一道「听音选词」题：语音把 audio_text 念出来，孩子选出他听到的那个。
+
+audio_text   要念的英文原文，只放要读的那一句（一个词或一个短语），不要带中文、不要带引号。
+options      候选词，两到四个，词性/长度接近（coffee / tea / please），不要有明显送分项。
+answer_index 正确选项的下标（从 0 开始）。
+prompt       题面那句中文指令，可留空（留空时前端显示「听一听，选出你听到的词」）。
+hint         答错时先给的那一层小提示，不要直接给答案。
+explain      答对之后显示的一句话解释。
+
+出完题就停下来等孩子点，不要自己把答案说出来。`,
+    inputSchema: obj(
+      { audio_text: S, options: strings, answer_index: I, prompt: S, hint: S, explain: S },
+      ["audio_text", "options", "answer_index"],
+    ),
+    handler: (a: Args) => envelope("listen_choice", exercisePayload("listen_choice", a)),
+  },
+  {
+    name: "present_word_bank",
+    description: `出一道「拼句」题：给一堆词块，让孩子拼成一句完整的话。
+
+bank    词库里的词块，两到六个，**打乱顺序给**（前端不洗牌，摆放顺序就是你给的顺序）。
+        可以放一个干扰词，但不要放得让孩子无从判断。
+answer  正确的词块序列，按顺序列全（每一项都要在 bank 里出现）。
+prompt  题面（比如「把这句话翻译成英文：我想要一杯咖啡。」）。
+hint    答错时先给的那一层小提示（比如「先找主语」），不要直接给答案。
+explain 答对之后显示的一句话解释。
+
+出完题就停下来等孩子点，不要自己把答案说出来。`,
+    inputSchema: obj(
+      { prompt: S, bank: strings, answer: strings, hint: S, explain: S },
+      ["prompt", "bank", "answer"],
+    ),
+    handler: (a: Args) => envelope("word_bank", exercisePayload("word_bank", a)),
+  },
+  {
+    name: "present_fill_blank",
+    description: `出一道「填空」题：句子里挖一个空，孩子从选项里选出该填的那个。
+
+sentence     带空的完整句子，空位写成三个下划线 ___（只挖一个空）。
+options      候选词，两到四个。
+answer_index 正确选项的下标（从 0 开始）。
+prompt       题面那句中文指令，可留空（留空时前端显示「选出括号里该填的词」）。
+hint         答错时先给的那一层小提示，不要直接给答案。
+explain      答对之后显示的一句话解释。
+
+出完题就停下来等孩子点，不要自己把答案说出来。`,
+    inputSchema: obj(
+      { sentence: S, options: strings, answer_index: I, prompt: S, hint: S, explain: S },
+      ["sentence", "options", "answer_index"],
+    ),
+    handler: (a: Args) => envelope("fill_blank", exercisePayload("fill_blank", a)),
+  },
+  {
+    name: "present_read_aloud",
+    description: `出一道「跟读」题：屏幕上一句英文，孩子按住按钮把它读出来，平台把他说的话转写成
+文字，再跟原句逐词比对给他看。
+
+text    要孩子跟读的英文句子，**完整的一句话**，三到八个词，别太长。只放英文，不要带中文、
+        引号和音标。这一句也是范例音要念的内容（站点自己的 TTS）。
+prompt  题面那句中文指令，可留空（留空时前端显示「跟我读：」）。
+hint    读得不对或不完整时给的那层小提示（比如「中间的 would like 连起来读」），不要直接给答案。
+explain 读对了之后显示的一句话解释。
+
+**这道题没有发音分**：比对只看转写出来的词对不对，转写模型还会顺手把读音纠成正确的词，
+所以结果偏乐观，别拿它当评测结论，也别在点评里说「发音很标准」这类话。
+出完题就停下来等孩子读，不要自己把句子念一遍，也不要替他说答案。`,
+    inputSchema: obj({ text: S, prompt: S, hint: S, explain: S }, ["text"]),
+    handler: (a: Args) => envelope("read_aloud", exercisePayload("read_aloud", a)),
+  },
+  {
+    name: "present_lesson",
+    description: `出一关的题（一关 8 道，可以分批交）：exercises 是这一批的题目，页面拿到后在本地一题一题放、
+本地判分，孩子作答期间不再找你。
+
+exercises  数组，每一项是一道题：{"type": <题型>, ...这个题型的字段}。四种题型的字段和单题工具
+           完全一样：
+           listen_choice  audio_text, options, answer_index, prompt?, hint?, explain?
+           word_bank      prompt, bank, answer, hint?, explain?
+           fill_blank     sentence, options, answer_index, prompt?, hint?, explain?
+           read_aloud     text, prompt?, hint?, explain?
+           每个字段怎么写，见 present_listen_choice / present_word_bank / present_fill_blank /
+           present_read_aloud 的说明：hint 不能是答案；answer 的每一项都要在 bank 里；sentence
+           只挖一个 ___；read_aloud 的 text 是三到八个词的一整句英文。
+title      这一关的标题，可留空。
+focus      这一关专门练什么，一句中文（比如「would like 的语序；分清 tea 和 coffee」），显示在
+           关卡开头。按上一关的错题出题时，把那几个错过的点写在这里。
+lesson_id  这一关的编号，原样抄消息里给的那个。
+batch      分批出时这是第几批（从 1 数）；batches 是一共几批。消息让你分两批出时，先调一次
+batches    （batch=1, batches=2）给前 2 道，页面拿到就开始答；再调一次（batch=2, batches=2）给剩下
+           的，两次 lesson_id 相同。不分批时 batch、batches 都填 1。
+
+题型混着排，同一种不要连着出；跟读放一到两道。缺字段或题型写错会整批报错，按报错改好后这一批
+重新调一次。`,
+    inputSchema: obj(
+      {
+        exercises: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              type: { type: "string", enum: Object.keys(EXERCISE_FIELDS) },
+              audio_text: S,
+              sentence: S,
+              text: S,
+              prompt: S,
+              options: strings,
+              answer_index: I,
+              bank: strings,
+              answer: strings,
+              hint: S,
+              explain: S,
+            },
+            required: ["type"],
+          },
+        },
+        title: S,
+        focus: S,
+        lesson_id: S,
+        batch: I,
+        batches: I,
+      },
+      ["exercises"],
+    ),
+    handler: (a: Args) => envelope("lesson", lessonPayload(a)),
+  },
   {
     name: "present_course_plan",
     description: "课程方案卡：price/original_price 用整数元，highlights 是卖点列表。",
@@ -461,4 +674,4 @@ get_weekly_report 沿用上游 weekly-report.schema.json 的 camelCase（那是�
 export const COURSE_TOOLS_BY_NAME = new Map(COURSE_TOOLS.map((t) => [t.name, t]));
 
 /** 仅供测试：把内部计算暴露出来，避免测试为了覆盖它们去走整条 JSON-RPC。 */
-export const __internals = { loadWeekRows, inWeek, detectAlerts, snake, envelope, groupBy, latestRaw };
+export const __internals = { loadWeekRows, inWeek, detectAlerts, snake, envelope, groupBy, latestRaw, lessonPayload };

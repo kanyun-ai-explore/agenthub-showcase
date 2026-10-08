@@ -88,7 +88,7 @@ function ChangeRow({
 
       {change.approved ? (
         <div style={{ fontSize: 11.5, color: "#16a06b", marginTop: 9 }}>
-          已批准 —— 现在让 Agent 执行 <code>apply_change</code> 就会真正生效
+          已批准——现在让 Agent 执行 <code>apply_change</code> 就会真正生效
         </div>
       ) : (
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
@@ -181,7 +181,7 @@ export function MerchantApp({
           <div className="m-body" style={{ marginTop: -18 }}>
             <div className="m-banner" style={{ background: "linear-gradient(122deg,#123a7a 0%,#1e6bff 58%,#00b2ff 100%)" }}>
               <h3>今天的店，问一句就知道</h3>
-              <p>经营快照、库存告警、滞销盘点，以及调价和促销草案 —— 都由 Agent 拟好，你只做同意或驳回。</p>
+              <p>经营快照、库存告警、滞销盘点，以及调价和促销草案，都由 Agent 拟好，你只做同意或驳回。</p>
               <span className="m-banner-cta">点底部中间开始 →</span>
             </div>
 

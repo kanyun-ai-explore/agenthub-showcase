@@ -1,0 +1,81 @@
+{
+  "id": "u1",
+  "title": "出门旅行",
+  "levels": [
+    {
+      "lesson_id": "u1-l1",
+      "title": "计划一次旅行",
+      "focus": "be going to 说计划，will 说临时决定",
+      "exercises": [
+        { "type": "listen_choice", "audio_text": "a trip abroad", "options": ["a trip aboard", "a trip abroad", "a ship abroad"], "answer_index": 1, "prompt": "听一听，选出你听到的短语", "hint": "听清 b 后面有没有 r", "explain": "abroad：在国外、去国外" },
+        { "type": "word_bank", "prompt": "翻译成英文：我们打算订一家便宜的酒店。", "bank": ["hotel", "going", "We're", "cheap", "will", "to", "a", "book"], "answer": ["We're", "going", "to", "book", "a", "cheap", "hotel"], "hint": "已经定好的计划", "explain": "be going to 说已定的计划" },
+        { "type": "fill_blank", "sentence": "We ___ going to visit Paris in May.", "options": ["are", "will", "have"], "answer_index": 0, "prompt": "选一个填进空里", "hint": "主语是 we，be 怎么变？", "explain": "we 后面的 be 用 are" },
+        { "type": "read_aloud", "text": "I'm going to plan our holiday.", "prompt": "跟我读：", "hint": "going to 读得轻一点", "explain": "going to + 动词原形" },
+        { "type": "listen_choice", "audio_text": "I'll take the train.", "options": ["I take the train.", "I'd take the train.", "I'll take the train."], "answer_index": 2, "prompt": "听一听，选出你听到的句子", "hint": "听 I 后面的缩写", "explain": "I'll 就是 I will" },
+        { "type": "fill_blank", "sentence": "The flight is very early, so I ___ take a taxi.", "options": ["going", "am", "will"], "answer_index": 2, "prompt": "选一个填进空里", "hint": "说话时才做的决定", "explain": "临时决定用 will" },
+        { "type": "word_bank", "prompt": "翻译成英文：我会记得带上护照。", "bank": ["remember", "passport", "I", "bring", "going", "my", "to", "will"], "answer": ["I", "will", "remember", "to", "bring", "my", "passport"], "hint": "will 后面接动词原形", "explain": "remember to do：记得去做" },
+        { "type": "read_aloud", "text": "Where are you going to stay?", "prompt": "跟我读：", "hint": "句尾语调往下降", "explain": "问计划：are you going to" }
+      ]
+    },
+    {
+      "lesson_id": "u1-l2",
+      "title": "在机场",
+      "focus": "must / have to 说必须，can / can't 说能不能",
+      "exercises": [
+        { "type": "listen_choice", "audio_text": "the departure gate", "options": ["the departure gate", "the departure date", "the arrival gate"], "answer_index": 0, "prompt": "听一听，选出你听到的短语", "hint": "注意最后一个词的开头", "explain": "departure gate：登机口" },
+        { "type": "fill_blank", "sentence": "Passengers ___ show their boarding pass at the gate.", "options": ["has to", "must", "need"], "answer_index": 1, "prompt": "选一个填进空里", "hint": "主语是复数，表示必须", "explain": "must 后面接动词原形" },
+        { "type": "word_bank", "prompt": "翻译成英文：你不能带水过安检。", "bank": ["water", "can't", "security", "takes", "You", "through", "take"], "answer": ["You", "can't", "take", "water", "through", "security"], "hint": "不允许：情态动词 + 原形", "explain": "can't 表示不允许" },
+        { "type": "read_aloud", "text": "There's a delay, so we must wait.", "prompt": "跟我读：", "hint": "There's 连起来读", "explain": "delay：延误" },
+        { "type": "fill_blank", "sentence": "Sorry, you ___ smoke here. It's not allowed.", "options": ["don't have to", "have to", "can't"], "answer_index": 2, "prompt": "选一个填进空里", "hint": "“不允许”该用哪个？", "explain": "not allowed 就是不能做" },
+        { "type": "listen_choice", "audio_text": "We don't have to wait.", "options": ["We didn't have to wait.", "We have to wait.", "We don't have to wait."], "answer_index": 2, "prompt": "听一听，选出你听到的句子", "hint": "听 have 前面的词", "explain": "don't have to：不必" },
+        { "type": "read_aloud", "text": "Can I have a window seat?", "prompt": "跟我读：", "hint": "句尾语调往上扬", "explain": "Can I…? 问能不能" },
+        { "type": "word_bank", "prompt": "翻译成英文：我需要托运我的行李吗？", "bank": ["luggage", "I", "check", "has", "to", "Do", "my", "have"], "answer": ["Do", "I", "have", "to", "check", "my", "luggage"], "hint": "have to 的疑问句用 Do", "explain": "Do I have to…? 问是否必须" }
+      ]
+    },
+    {
+      "lesson_id": "u1-l3",
+      "title": "旅途见闻",
+      "focus": "一般过去时：规则和不规则动词",
+      "exercises": [
+        { "type": "listen_choice", "audio_text": "We visited a museum.", "options": ["We visit a museum.", "We visited a museum.", "We've visited a museum."], "answer_index": 1, "prompt": "听一听，选出你听到的句子", "hint": "听动词末尾的音", "explain": "visited：visit 的过去式" },
+        { "type": "fill_blank", "sentence": "Last summer we ___ to Spain.", "options": ["went", "go", "have gone"], "answer_index": 0, "prompt": "选一个填进空里", "hint": "last summer 是过去", "explain": "go 的过去式是 went" },
+        { "type": "read_aloud", "text": "We arrived at the beach at noon.", "prompt": "跟我读：", "hint": "arrived 的 d 要读出来", "explain": "arrive at：到达某地" },
+        { "type": "word_bank", "prompt": "翻译成英文：我们错过了最后一班火车。", "bank": ["train", "missed", "the", "miss", "We", "last"], "answer": ["We", "missed", "the", "last", "train"], "hint": "已经发生的事", "explain": "miss 的过去式是 missed" },
+        { "type": "listen_choice", "audio_text": "She bought a souvenir.", "options": ["She bought a souvenir.", "She brought a souvenir.", "She bought souvenirs."], "answer_index": 0, "prompt": "听一听，选出你听到的句子", "hint": "听清动词里有没有 r 音", "explain": "bought 是 buy 的过去式" },
+        { "type": "read_aloud", "text": "The guide showed us the old town.", "prompt": "跟我读：", "hint": "showed 的 ed 读 d", "explain": "show 的过去式是 showed" },
+        { "type": "fill_blank", "sentence": "I ___ my map on the bus yesterday.", "options": ["lose", "lost", "loses"], "answer_index": 1, "prompt": "选一个填进空里", "hint": "yesterday 是过去", "explain": "lose 的过去式是 lost" },
+        { "type": "word_bank", "prompt": "翻译成英文：你去博物馆了吗？", "bank": ["museum", "went", "you", "the", "Did", "to", "go"], "answer": ["Did", "you", "go", "to", "the", "museum"], "hint": "Did 后面用动词原形", "explain": "Did you…? 问过去的事" }
+      ]
+    },
+    {
+      "lesson_id": "u1-l4",
+      "title": "你去过吗",
+      "focus": "现在完成时说经历：ever / never / already / yet",
+      "exercises": [
+        { "type": "listen_choice", "audio_text": "Have you ever been to Japan?", "options": ["Have you ever been to Japan?", "Did you ever go to Japan?", "Have you ever gone to Japan?"], "answer_index": 0, "prompt": "听一听，选出你听到的句子", "hint": "听 ever 后面的词", "explain": "have been to：去过某地" },
+        { "type": "fill_blank", "sentence": "I have never ___ Indian food.", "options": ["try", "tried", "tries"], "answer_index": 1, "prompt": "选一个填进空里", "hint": "have 后面用过去分词", "explain": "try 的过去分词是 tried" },
+        { "type": "word_bank", "prompt": "翻译成英文：你尝过当地的食物吗？", "bank": ["food", "tried", "Did", "local", "you", "the", "Have"], "answer": ["Have", "you", "tried", "the", "local", "food"], "hint": "问经历，用现在完成时", "explain": "Have you tried…? 问经历" },
+        { "type": "read_aloud", "text": "I have never been to Paris.", "prompt": "跟我读：", "hint": "never 要重读", "explain": "never：从来没有" },
+        { "type": "listen_choice", "audio_text": "I've already seen it.", "options": ["I already saw it.", "I've already seen them.", "I've already seen it."], "answer_index": 2, "prompt": "听一听，选出你听到的句子", "hint": "注意开头的缩写", "explain": "already 放在 have 后面" },
+        { "type": "fill_blank", "sentence": "Have you packed your bag ___?", "options": ["yet", "still", "ago"], "answer_index": 0, "prompt": "选一个填进空里", "hint": "疑问句句尾问“了吗”", "explain": "yet 用在疑问句句尾" },
+        { "type": "read_aloud", "text": "We have learned a lot about their culture.", "prompt": "跟我读：", "hint": "learned 的 ed 读 d", "explain": "culture：文化" },
+        { "type": "word_bank", "prompt": "翻译成英文：你是什么时候去那里的？", "bank": ["you", "there", "have", "When", "go", "did"], "answer": ["When", "did", "you", "go", "there"], "hint": "问具体时间用过去时", "explain": "有具体时间就不用完成时" }
+      ]
+    },
+    {
+      "lesson_id": "u1-l5",
+      "title": "单元复习：在酒店",
+      "focus": "复习本单元的语法，加上 Could you … ? 和 I'd like …",
+      "exercises": [
+        { "type": "listen_choice", "audio_text": "I have a reservation.", "options": ["I had a reservation.", "I have a reservation.", "I made a reservation."], "answer_index": 1, "prompt": "听一听，选出你听到的句子", "hint": "听 I 后面的动词", "explain": "reservation：预订" },
+        { "type": "fill_blank", "sentence": "There ___ a problem with my room yesterday.", "options": ["is", "were", "was"], "answer_index": 2, "prompt": "选一个填进空里", "hint": "yesterday，单数", "explain": "过去、单数用 was" },
+        { "type": "word_bank", "prompt": "翻译成英文：我想要一间景色好的房间。", "bank": ["view", "a", "I'd", "room", "would", "like", "with", "a"], "answer": ["I'd", "like", "a", "room", "with", "a", "view"], "hint": "礼貌地说“我想要”", "explain": "I'd 是 I would 的缩写" },
+        { "type": "read_aloud", "text": "Could you bring me another towel?", "prompt": "跟我读：", "hint": "Could you 连起来读", "explain": "Could you…? 礼貌地请求" },
+        { "type": "fill_blank", "sentence": "We ___ already checked out of the hotel.", "options": ["have", "has", "did"], "answer_index": 0, "prompt": "选一个填进空里", "hint": "already 前面缺助动词", "explain": "we 后面用 have" },
+        { "type": "listen_choice", "audio_text": "You must leave your key here.", "options": ["You mustn't leave your key here.", "You must leave your bag here.", "You must leave your key here."], "answer_index": 2, "prompt": "听一听，选出你听到的句子", "hint": "听 must 后面有没有否定", "explain": "must：必须" },
+        { "type": "read_aloud", "text": "I'm going to call reception now.", "prompt": "跟我读：", "hint": "reception 重音在中间", "explain": "reception：酒店前台" },
+        { "type": "word_bank", "prompt": "翻译成英文：那位前台接待员非常友好。", "bank": ["friendly", "were", "The", "very", "receptionist", "was"], "answer": ["The", "receptionist", "was", "very", "friendly"], "hint": "主语是单数", "explain": "单数主语过去式用 was" }
+      ]
+    }
+  ]
+}

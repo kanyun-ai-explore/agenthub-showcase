@@ -218,7 +218,7 @@ export function AgentSheet({
               <div className="m-msg" data-role="agent">
                 <div className="m-bubble">
                   {blocked
-                    ? "这个案例还没接上控制面，下面的示例问题仅作展示。"
+                    ? "这个视角还没接入控制面，下面的示例问题仅作展示。"
                     : "你好，我是这家店的导购。说说你想要什么，或者从下面挑一个开始。"}
                 </div>
               </div>

@@ -21,6 +21,15 @@ export function ScenarioIcon({ id }: { id: string }) {
       </svg>
     );
   }
+  if (id === "language") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 5h16v11h-7l-4 4v-4H4V5Z" />
+        <path d="m9 13 3-6 3 6" />
+        <path d="M10 11h4" />
+      </svg>
+    );
+  }
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
       <circle cx="12" cy="12" r="8" />

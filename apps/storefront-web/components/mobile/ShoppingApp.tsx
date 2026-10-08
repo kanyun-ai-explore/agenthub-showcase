@@ -478,14 +478,14 @@ function MeTab({
           ))}
           <div style={{ fontSize: 11, color: "#a0a5ae", padding: "10px 0 2px", lineHeight: 1.6 }}>
             这几条来自固定数据，由 <code>get_preferences</code> 随记忆一起交给 Agent。
-            上面那些是它自己在对话里攒的。
+            上面那些是 Agent 自己在对话里记下的。
           </div>
         </div>
 
         <div className="m-panel" style={{ padding: "12px 14px" }}>
           <div style={{ fontSize: 11.5, color: "#8a8f99", lineHeight: 1.7 }}>
             你的访客身份 <code>{visitorId ?? "…"}</code> 由平台在会话建立时签发（命中预热池时是暖机
-            阶段铸好的 EUID）。购物车和记忆都按它隔离，所以别人看到的不是你这一份。
+            阶段生成的 EUID）。购物车和记忆都按它隔离，所以别人看到的不是你这一份。
           </div>
           <button
             type="button"

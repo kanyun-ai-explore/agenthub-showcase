@@ -37,8 +37,11 @@
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
   --topbar-h: 60px;
+  /* 手机屏是 iPhone 的可视区 390×844，外壳四边各 10px，整台 410×864 */
+  --phone-w: 410px;
+  --phone-h: 864px;
   /* 整台手机按视口高度缩放，笔记本上也能整台放进锁定高度的舞台 */
-  --phone-scale: min(1, tan(atan2(100dvh - 172px, 800px)));
+  --phone-scale: min(1, tan(atan2(100dvh - 172px, var(--phone-h))));
 
   color-scheme: light;
 }
@@ -203,7 +206,7 @@ code {
 }
 .scen-tab[data-active="true"] {
   color: var(--ink);
-  background: #fff;
+  background: var(--surface);
   box-shadow: 0 0 0 1px var(--line), 0 1px 2px oklch(0 0 0 / 0.05);
 }
 .scen-tab[data-active="true"] svg {
@@ -239,7 +242,7 @@ code {
   padding: 0 14px;
   border-radius: var(--r-sm);
   border: 1px solid var(--line-2);
-  background: #fff;
+  background: var(--surface);
   font-size: 13.5px;
   font-weight: 550;
   color: var(--ink);
@@ -386,7 +389,8 @@ code {
   align-items: center;
   justify-content: center;
   gap: 14px;
-  padding: 28px 24px;
+  /* 左右 22：456 宽的列减掉右边框 1px，放得下缩放到 1 的整台外框（410） */
+  padding: 28px 22px;
   border-right: 1px solid var(--line);
   background-color: var(--surface);
   background-image:
@@ -398,13 +402,13 @@ code {
 
 .phone-fit {
   flex: none;
-  width: calc(390px * var(--phone-scale));
-  height: calc(800px * var(--phone-scale));
+  width: calc(var(--phone-w) * var(--phone-scale));
+  height: calc(var(--phone-h) * var(--phone-scale));
 }
 
 .phone {
-  width: 390px;
-  height: 800px;
+  width: var(--phone-w);
+  height: var(--phone-h);
   transform: scale(var(--phone-scale));
   transform-origin: top left;
   border-radius: 50px;
@@ -427,19 +431,7 @@ code {
   display: flex;
   flex-direction: column;
   isolation: isolate;
-  background: #fff;
-}
-
-.phone-notch {
-  position: absolute;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 104px;
-  height: 25px;
-  border-radius: 999px;
-  background: oklch(0.13 0 0);
-  z-index: 60;
+  background: var(--surface);
 }
 
 .phone-home {
@@ -464,7 +456,7 @@ code {
   padding: 6px 12px 6px 10px;
   border-radius: 999px;
   border: 1px solid var(--line);
-  background: #fff;
+  background: var(--surface);
   font-size: 12px;
   color: var(--text-2);
   font-variant-numeric: tabular-nums;
@@ -607,7 +599,7 @@ code {
   padding: 4px 0;
   border: 1px solid var(--line);
   border-radius: var(--r);
-  background: #fff;
+  background: var(--surface);
 }
 .tl-row {
   position: relative;
@@ -640,7 +632,7 @@ code {
   margin-top: 1px;
   border-radius: 999px;
   border: 1.5px solid var(--line-2);
-  background: #fff;
+  background: var(--surface);
   display: grid;
   place-items: center;
   font-size: 10.5px;
@@ -689,6 +681,36 @@ code {
   padding-top: 2px;
 }
 
+/* 会话在 AgentHub 门户里的入口，时间线下方 */
+.tl-open {
+  display: grid;
+  gap: 2px;
+  margin: 10px 0 0;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface);
+  transition: border-color 0.2s;
+}
+.tl-open:hover {
+  border-color: color-mix(in oklch, var(--brand) 45%, var(--line));
+}
+.tl-open-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  border-bottom: 1px dotted currentColor;
+}
+.tl-open:hover .tl-open-title {
+  border-bottom-style: solid;
+}
+.tl-open-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--text-3);
+}
+
 /* 能力卡 */
 .caps {
   display: grid;
@@ -702,7 +724,7 @@ code {
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: var(--r);
-  background: #fff;
+  background: var(--surface);
   transition: border-color 0.2s, background 0.2s;
 }
 .cap[data-live="true"] {
@@ -781,6 +803,16 @@ code {
   font-size: 11.5px;
   color: oklch(0.7 0.02 155);
   border-bottom: 1px solid oklch(1 0 0 / 0.08);
+}
+.code-title a,
+.cap code a {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px dotted currentColor;
+}
+.code-title a:hover,
+.cap code a:hover {
+  border-bottom-style: solid;
 }
 .code-title::before {
   content: "";
@@ -897,7 +929,7 @@ code {
   padding: 12px 16px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: #fff;
+  background: var(--surface);
   transition: border-color 0.15s;
 }
 .link:hover {
@@ -999,7 +1031,7 @@ code {
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   overflow: hidden;
-  background: #fff;
+  background: var(--surface);
 }
 .hero-figures > div {
   padding: 22px 20px 18px;
@@ -1025,7 +1057,7 @@ code {
 
 .scen-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
 }
 .scen {
@@ -1036,7 +1068,7 @@ code {
   padding: 24px;
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  background: #fff;
+  background: var(--surface);
   transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
 }
 .scen:hover {
@@ -1180,7 +1212,7 @@ code {
   }
 
   .stage {
-    --phone-scale: min(1, tan(atan2(100vw - 32px, 390px)));
+    --phone-scale: min(1, tan(atan2(100vw - 32px, var(--phone-w))));
     border-right: 0;
     padding: 24px 16px;
   }
@@ -1217,5 +1249,18 @@ code {
   }
   .stats > div:first-child {
     border-top: 0;
+  }
+}
+
+/* 平板和小笔记本（如 1024×768）：还是上面的文档流，但外框再按高度收一档，滚到舞台时整台
+ * 手机连同状态条一屏放得下（112 = 舞台上下内边距 48 + 间距 14 + 状态条约 34 + 余量）。
+ * 手机宽度（<600px）只按宽度缩放，不动。 */
+@media (min-width: 600px) and (max-width: 1120px) {
+  .stage {
+    --phone-scale: min(
+      1,
+      tan(atan2(100vw - 32px, var(--phone-w))),
+      tan(atan2(100dvh - 112px, var(--phone-h)))
+    );
   }
 }

@@ -1,5 +1,6 @@
 import { getAgentHubClient, isAgentHubConfigured } from "@/lib/agenthub/client";
 import { errorResponse } from "@/lib/backend/errors";
+import { portalSessionHref } from "@/lib/showcase/links";
 
 /**
  * 会话就绪轮询。建会话在记录建好时就返回，那时沙箱还没起来。
@@ -18,6 +19,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const { client } = getAgentHubClient();
     const result = await client.sessions.get(id);
     const status = result.session?.status ?? null;
+    // AGENTHUB_PROJECT_ID 只在服务端读，portalHref 让客户端拿得到门户落点而不泄露 token。
+    const projectId = process.env.AGENTHUB_PROJECT_ID;
     return Response.json({
       status,
       // Surfaced so the page can say WHY it is still waiting rather than just
@@ -25,6 +28,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       // sandbox is still booting.
       pendingRevival: result.pendingRevival ?? null,
       failureReason: result.session?.failureReason ?? null,
+      portalHref: projectId ? portalSessionHref(projectId, id) : null,
     });
   } catch (err) {
     return errorResponse(err);

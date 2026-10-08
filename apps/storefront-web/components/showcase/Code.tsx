@@ -37,10 +37,29 @@ function paint(line: string, key: number): ReactNode {
   );
 }
 
-export function Code({ children, title }: { children: string; title?: string }) {
+export function Code({
+  children,
+  title,
+  href,
+}: {
+  children: string;
+  title?: string;
+  /** 给了就把标题渲染成跳转（公开仓库里对应的文件）。 */
+  href?: string;
+}) {
   return (
     <div className="code">
-      {title ? <div className="code-title">{title}</div> : null}
+      {title ? (
+        <div className="code-title">
+          {href ? (
+            <a href={href} target="_blank" rel="noreferrer">
+              {title}
+            </a>
+          ) : (
+            title
+          )}
+        </div>
+      ) : null}
       <pre>{children.split("\n").map(paint)}</pre>
     </div>
   );

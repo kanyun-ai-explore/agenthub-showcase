@@ -1,0 +1,81 @@
+{
+  "id": "u2",
+  "title": "生活和工作",
+  "levels": [
+    {
+      "lesson_id": "u2-l1",
+      "title": "买东西比一比",
+      "focus": "比较级、最高级和 as … as",
+      "exercises": [
+        { "type": "listen_choice", "audio_text": "a bigger size", "options": ["a bigger size", "a big size", "the biggest size"], "answer_index": 0, "prompt": "听一听，选出你听到的短语", "hint": "听形容词的结尾", "explain": "bigger 是 big 的比较级" },
+        { "type": "fill_blank", "sentence": "This jacket is ___ than that one.", "options": ["cheapest", "cheaper", "cheap"], "answer_index": 1, "prompt": "选一个填进空里", "hint": "后面有 than", "explain": "有 than 就用比较级" },
+        { "type": "word_bank", "prompt": "翻译成英文：这双鞋比那双舒服。", "bank": ["than", "comfortable", "These", "those", "most", "are", "more", "shoes"], "answer": ["These", "shoes", "are", "more", "comfortable", "than", "those"], "hint": "长形容词前加一个词", "explain": "more + 长形容词 = 比较级" },
+        { "type": "read_aloud", "text": "Can I try on this shirt?", "prompt": "跟我读：", "hint": "try on 连起来读", "explain": "try on：试穿" },
+        { "type": "listen_choice", "audio_text": "the best price in town", "options": ["the best place in town", "the best price in town", "a better price in town"], "answer_index": 1, "prompt": "听一听，选出你听到的短语", "hint": "注意第三个词", "explain": "the best：最好的" },
+        { "type": "word_bank", "prompt": "翻译成英文：它和那件一样便宜。", "bank": ["cheap", "as", "one", "It", "than", "is", "that", "as"], "answer": ["It", "is", "as", "cheap", "as", "that", "one"], "hint": "“一样……”怎么说？", "explain": "as + 原级 + as：一样" },
+        { "type": "fill_blank", "sentence": "This is the ___ expensive dress in the shop.", "options": ["much", "many", "most"], "answer_index": 2, "prompt": "选一个填进空里", "hint": "在全店里比，用最高级", "explain": "长词最高级用 the most" },
+        { "type": "read_aloud", "text": "Shoes are cheaper during the sale.", "prompt": "跟我读：", "hint": "cheaper 的 er 读轻", "explain": "sale：打折、促销" }
+      ]
+    },
+    {
+      "lesson_id": "u2-l2",
+      "title": "看病",
+      "focus": "should / shouldn't 给建议，have a … 说症状",
+      "exercises": [
+        { "type": "listen_choice", "audio_text": "I have a sore throat.", "options": ["I had a sore throat.", "I have a sore foot.", "I have a sore throat."], "answer_index": 2, "prompt": "听一听，选出你听到的句子", "hint": "听动词和最后一个词", "explain": "sore throat：嗓子疼" },
+        { "type": "word_bank", "prompt": "翻译成英文：你应该多喝水。", "bank": ["water", "drinks", "You", "more", "should", "drink"], "answer": ["You", "should", "drink", "more", "water"], "hint": "should 后面接动词原形", "explain": "should 表示建议" },
+        { "type": "read_aloud", "text": "I think I have a fever.", "prompt": "跟我读：", "hint": "have a 连起来读", "explain": "have a fever：发烧" },
+        { "type": "fill_blank", "sentence": "You ___ go to work today. You need to rest.", "options": ["should", "must", "shouldn't"], "answer_index": 2, "prompt": "选一个填进空里", "hint": "需要休息，就别去了", "explain": "shouldn't：不应该" },
+        { "type": "listen_choice", "audio_text": "Take this medicine twice a day.", "options": ["Take this medicine twice a day.", "Take this medicine once a day.", "Take this medicine three times a day."], "answer_index": 0, "prompt": "听一听，选出你听到的句子", "hint": "听“一天几次”", "explain": "twice a day：一天两次" },
+        { "type": "read_aloud", "text": "I'd like to make an appointment.", "prompt": "跟我读：", "hint": "make an 连起来读", "explain": "appointment：预约" },
+        { "type": "word_bank", "prompt": "翻译成英文：我头疼得厉害。", "bank": ["headache", "have", "a", "I", "has", "terrible"], "answer": ["I", "have", "a", "terrible", "headache"], "hint": "have a + 症状", "explain": "have a headache：头疼" },
+        { "type": "fill_blank", "sentence": "You can buy cough medicine at the ___.", "options": ["library", "pharmacy", "bakery"], "answer_index": 1, "prompt": "选一个填进空里", "hint": "在哪里买药？", "explain": "pharmacy：药店" }
+      ]
+    },
+    {
+      "lesson_id": "u2-l3",
+      "title": "工作安排",
+      "focus": "现在进行时说约好的安排，will 主动提出帮忙",
+      "exercises": [
+        { "type": "listen_choice", "audio_text": "We're meeting a client at ten.", "options": ["We were meeting a client at ten.", "We're meeting a client at ten.", "We're meeting a client at two."], "answer_index": 1, "prompt": "听一听，选出你听到的句子", "hint": "听开头和最后一个词", "explain": "进行时表示约好的安排" },
+        { "type": "read_aloud", "text": "My colleague is sending the report.", "prompt": "跟我读：", "hint": "colleague 重音在前", "explain": "colleague：同事" },
+        { "type": "fill_blank", "sentence": "I ___ my manager tomorrow at nine.", "options": ["am meeting", "meeting", "met"], "answer_index": 0, "prompt": "选一个填进空里", "hint": "约好的事，用进行时", "explain": "已约好的事用 be + doing" },
+        { "type": "word_bank", "prompt": "翻译成英文：你有空开个会吗？", "bank": ["meeting", "you", "Is", "available", "for", "Are", "a"], "answer": ["Are", "you", "available", "for", "a", "meeting"], "hint": "you 前面用哪个 be？", "explain": "available：有空的" },
+        { "type": "listen_choice", "audio_text": "I'll send you an email.", "options": ["I sent you an email.", "I'll send you an email.", "I'll send him an email."], "answer_index": 1, "prompt": "听一听，选出你听到的句子", "hint": "听开头的缩写和动词", "explain": "I'll 主动提出要做的事" },
+        { "type": "fill_blank", "sentence": "The printer isn't working. Don't worry, I ___ fix it.", "options": ["will", "am", "was"], "answer_index": 0, "prompt": "选一个填进空里", "hint": "当场提出帮忙", "explain": "主动帮忙用 will" },
+        { "type": "read_aloud", "text": "What time are you leaving tomorrow?", "prompt": "跟我读：", "hint": "are you 读得轻一点", "explain": "问对方约好的安排" },
+        { "type": "word_bank", "prompt": "翻译成英文：我来帮你写报告吧。", "bank": ["write", "report", "helping", "I'll", "the", "you", "help"], "answer": ["I'll", "help", "you", "write", "the", "report"], "hint": "当场提出帮忙用 will", "explain": "help you 后面接动词原形" }
+      ]
+    },
+    {
+      "lesson_id": "u2-l4",
+      "title": "求职面试",
+      "focus": "现在完成时 + for / since，用 How long 问多久",
+      "exercises": [
+        { "type": "listen_choice", "audio_text": "for three years", "options": ["for three years", "for thirty years", "for three months"], "answer_index": 0, "prompt": "听一听，选出你听到的短语", "hint": "注意数字和时间单位", "explain": "for + 一段时间" },
+        { "type": "word_bank", "prompt": "翻译成英文：你在这里工作多久了？", "bank": ["worked", "you", "How", "did", "here", "long", "have"], "answer": ["How", "long", "have", "you", "worked", "here"], "hint": "问持续多久，用完成时", "explain": "完成时问持续了多久" },
+        { "type": "fill_blank", "sentence": "I have lived in this city ___ 2020.", "options": ["for", "ago", "since"], "answer_index": 2, "prompt": "选一个填进空里", "hint": "2020 是一个时间点", "explain": "时间点前用 since" },
+        { "type": "read_aloud", "text": "I have applied for the job.", "prompt": "跟我读：", "hint": "applied 的 ed 读 d", "explain": "apply for：申请" },
+        { "type": "listen_choice", "audio_text": "She's worked here since May.", "options": ["She worked here in May.", "She's worked here since March.", "She's worked here since May."], "answer_index": 2, "prompt": "听一听，选出你听到的句子", "hint": "听月份和动词", "explain": "since May：从五月起" },
+        { "type": "word_bank", "prompt": "翻译成英文：我有很多销售经验。", "bank": ["of", "experience", "many", "have", "sales", "I", "a", "lot"], "answer": ["I", "have", "a", "lot", "of", "sales", "experience"], "hint": "experience 不可数", "explain": "a lot of 可接不可数名词" },
+        { "type": "fill_blank", "sentence": "The ___ is 3,000 dollars a month.", "options": ["skill", "salary", "interview"], "answer_index": 1, "prompt": "选一个填进空里", "hint": "每个月拿到的钱", "explain": "salary：工资" },
+        { "type": "read_aloud", "text": "How long have you been in this job?", "prompt": "跟我读：", "hint": "How long 句尾降调", "explain": "How long 问持续多久" }
+      ]
+    },
+    {
+      "lesson_id": "u2-l5",
+      "title": "单元复习：忙碌的一周",
+      "focus": "复习比较级、should、进行时说安排、for / since",
+      "exercises": [
+        { "type": "listen_choice", "audio_text": "I'm going to the gym.", "options": ["I'm going to the gym.", "I went to the gym.", "I'm going to the game."], "answer_index": 0, "prompt": "听一听，选出你听到的句子", "hint": "听开头和最后一个词", "explain": "gym：健身房" },
+        { "type": "fill_blank", "sentence": "You look tired. You ___ go to bed earlier.", "options": ["shouldn't", "should", "should to"], "answer_index": 1, "prompt": "选一个填进空里", "hint": "累了，该怎么做？", "explain": "should + 动词原形：建议" },
+        { "type": "word_bank", "prompt": "翻译成英文：这周比上周更忙。", "bank": ["last", "busier", "This", "more", "week", "is", "than", "week"], "answer": ["This", "week", "is", "busier", "than", "last", "week"], "hint": "busy 的比较级怎么变？", "explain": "busy 变比较级：busier" },
+        { "type": "read_aloud", "text": "I have played tennis for two years.", "prompt": "跟我读：", "hint": "for two years 连起来读", "explain": "现在完成时 + for" },
+        { "type": "fill_blank", "sentence": "I'm ___ my friends for dinner on Saturday.", "options": ["meeting", "meet", "met"], "answer_index": 0, "prompt": "选一个填进空里", "hint": "约好的安排", "explain": "be + doing 表示安排" },
+        { "type": "listen_choice", "audio_text": "a healthier diet", "options": ["a healthy diet", "the healthiest diet", "a healthier diet"], "answer_index": 2, "prompt": "听一听，选出你听到的短语", "hint": "听形容词有没有变化", "explain": "healthier 是比较级" },
+        { "type": "read_aloud", "text": "You should get more sleep.", "prompt": "跟我读：", "hint": "should 的 l 不发音", "explain": "get more sleep：多睡点" },
+        { "type": "word_bank", "prompt": "翻译成英文：你要和谁一起吃晚饭？", "bank": ["dinner", "you", "with", "do", "Who", "having", "are"], "answer": ["Who", "are", "you", "having", "dinner", "with"], "hint": "约好的安排用进行时", "explain": "进行时问对方的安排" }
+      ]
+    }
+  ]
+}

@@ -133,3 +133,15 @@ The rest of this repository is original work: the Next.js app under
 (`shared/course-stdio-server/` and its TypeScript port in the web app), all seven
 `agent.yaml` files, `evals/`, and the scripts under `scripts/`. Licensed under the
 same Apache License 2.0 for consistency with the vendored material (see LICENSE).
+
+--------------------------------------------------------------------------------
+6. Third-party fonts
+--------------------------------------------------------------------------------
+
+  apps/storefront-web/app/fonts/Nunito-latin-wght.woff2
+
+  Nunito (variable weight, Latin subset), Copyright 2014 The Nunito Project
+  Authors (https://github.com/googlefonts/nunito). Licensed under the SIL Open
+  Font License, Version 1.1, not under this repository's Apache License 2.0. The
+  full license text ships next to the font file:
+  apps/storefront-web/app/fonts/Nunito-LICENSE.txt.
