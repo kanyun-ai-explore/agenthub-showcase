@@ -2,11 +2,11 @@
  * 英语小课的一关：从 agent 的回合里取出题目、本地判分、拼发给 agent 的消息。纯函数，
  * 不碰 React，`scripts/english-lesson/check.mjs` 直接 import 它跑用例。
  *
- * 题从哪来（W1）：agent 调 `present_lesson`，信封的
- * `exercises` 就是这一关的题。冷启开的那一关**分两批出**：
- * 同一个 `lesson_id`，先 `batch=1` 给 2 道、再 `batch=2` 给其余的——页面拿到第一批就开答。
- * 结算时出的下一关是一批整关（`batches=1`）。回合还在跑时流里的草稿按 toolCallId 全记
- * （`liveLessonCards`），两批并行发出、一次被拒后重调都按批次号拼。
+ * 题从哪来（课程 v2）：单元 1、2 的题写死在 `units/*.json`，每一关当成一张 `lesson`
+ * 卡走同一个 `lessonFromCards`；单元 3 由 agent 在后台调 `present_lesson` 一批出齐（`batches=1`），
+ * 信封的 `exercises` 就是这一关的题。分批拼装（`batch` / `batches`）的规则仍然保留：agent 偶尔
+ * 会分几次交，回合还在跑时流里的草稿按 toolCallId 全记（`liveLessonCards`），并行发出、被拒后
+ * 重调都按批次号拼。
  * 兜底：这一轮没有 `lesson` 卡、但有单题卡（`listen_choice` 这些），就按出现顺序把单题卡
  * 收成一关——站点先发、agent 后 promote 的那段时间里，生产槽位上还是旧版 agent，它只会
  * 调单题工具（不兜底就是「静默丢卡」）。
@@ -50,6 +50,11 @@ export interface LessonContent {
   dropped: number;
   /** `lesson` = 一次 present_lesson；`cards` = 兜底，从单题卡收的。 */
   source: "lesson" | "cards";
+  /**
+   * 单元 3 那一关是哪个会话的哪一轮出的（回合终态时由 `useLessonChannel` 记下）。取运行时读音靠它：
+   * 浏览器只报题的坐标，服务端从那一轮里取要念的文字（`lib/course/course-audio.ts`）。
+   */
+  origin?: { sessionId: string; turnId: string };
 }
 
 export const EXERCISE_TYPES: readonly ExerciseType[] = ["listen_choice", "word_bank", "fill_blank", "read_aloud"];
@@ -171,7 +176,7 @@ const positiveInt = (v: unknown): number | undefined => (Number.isInteger(v) && 
  *
  * `live`（回合还在跑，卡里混着草稿入参）：
  * - 只拼**从第 1 批起连续**的那几批：第 2 批先到、第 1 批还没到时先不画，免得第 1 批后到时
- *   插到前面、把孩子手上那一题挤到别的下标；
+ *   插到前面、把学员手上那一题挤到别的下标；
  * - `complete` 恒为 false：草稿可能被 MCP 拒掉，只有回合终态的权威结果才能把一关标成「到齐」
  *   （否则被拒的草稿会被当成定稿，提前结算）。
  */
@@ -230,7 +235,7 @@ export function stampLesson(content: LessonContent, lessonId: string): LessonCon
 /**
  * 出题的回合到终态：用权威结果定下这一关。
  * - 权威结果比已经交给播放器的同一关**短**（草稿入参画出的题被 MCP 拒了、回合里也没补上）：
- *   不缩短，留着已经画出来的那几道——孩子可能已经答到后面了，缩短会让播放器下标越界。
+ *   不缩短，留着已经画出来的那几道——学员可能已经答到后面了，缩短会让播放器下标越界。
  * - 回合里一道能画的题都没有：同一关已经有题就留着，只收掉「还有题要来」；否则 null。
  * 不论哪种，回合已经结束，后面不会再有批次 → `complete: true`。
  */
@@ -301,10 +306,10 @@ export function liveLessonCards(cards: readonly TurnCard[], drafts: readonly Too
 }
 
 /**
- * 孩子走到过的题不再换：`locked` 是已经走到过的那几道，
+ * 学员走到过的题不再换：`locked` 是已经走到过的那几道，
  * 原样留着；后面的位置用新来的。草稿被拒后重调、两批先后颠倒、回合终态的权威结果和草稿不一样——
- * 这些都只会改到孩子还没看到的题，作答记录和结算里的错题都挂在他真看到的那道上。
- * `reached` = 孩子当前走到的下标 + 1（还没走到任何一道时为 0）。
+ * 这些都只会改到学员还没看到的题，作答记录和结算里的错题都挂在他真看到的那道上。
+ * `reached` = 学员当前走到的下标 + 1（还没走到任何一道时为 0）。
  */
 export function lockReached<T>(locked: readonly T[], incoming: readonly T[], reached: number): { shown: T[]; locked: T[] } {
   const shown = [...locked, ...incoming.slice(locked.length)];
@@ -322,7 +327,7 @@ export type Answer =
   | { kind: "reading"; transcript: string; comparison: ReadingComparison };
 
 /**
- * 本地判分（这是孩子每次点「检查」后零等待的原因）。
+ * 本地判分（这是学员每次点「检查」后零等待的原因）。
  * 拼句按**词序列**比，不按词块下标比：bank 里有两个 `a`、或者词块是 `would like` 这种
  * 多词块时，拼法不止一种，句子对就算对；大小写和句末标点不算错。
  * 跟读：逐词比对全绿才算对（不打发音分，见 `read-aloud.ts`）。
@@ -357,7 +362,7 @@ export function correctText(exercise: Exercise): string {
   }
 }
 
-/** 孩子的答案，原样写成一句（发给 agent 的【为什么】/【结算】里用）。 */
+/** 学员的答案，原样写成一句（发给 agent 的【为什么】和错题汇总里用）。 */
 export function answerText(exercise: Exercise, answer: Answer): string {
   switch (answer.kind) {
     case "choice":
@@ -387,44 +392,11 @@ export function describeExercise(exercise: Exercise): string {
 
 // ---------------------------------------------------------------------------
 // 发给 agent 的消息（格式写在 edu-english-coach 的 CLAUDE.md「怎么上这门课」里）
+//
+// 课程 v2：单元 1、2 的题写死在前端，agent 只在这几个时刻出场——
+// 【出题】后台出单元 3 的一关、【单元结算】一个单元做完写一句点评、【为什么】讲一题、
+// 跟读的转写（语音回合，消息就是转写本身，不经这里拼）。
 // ---------------------------------------------------------------------------
-
-export interface LessonRequest {
-  /** `english-path.ts` 的 `stopLabel`。 */
-  label: string;
-  goal: string;
-  /** 页面给这一关起的编号，agent 原样抄进 present_lesson 的 lesson_id。 */
-  lessonId: string;
-}
-
-/**
- * 【出题】W1：开一关（会话就绪就预先要，或者孩子点开了一个还没出好的关）。
- * 分两批出：整关一次出约 20–24 s，先出 2 道让孩子先答起来。
- * hint / explain 限长，第二批之后不再写字。
- */
-export function lessonRequestMessage({ label, goal, lessonId }: LessonRequest): string {
-  return [
-    `【出题】${label}`,
-    `lesson_id：${lessonId}`,
-    `这一关要练：${goal}`,
-    `分两批出：先调 present_lesson（lesson_id=${lessonId}，batch=1，batches=2）给前 2 道，再调 present_lesson（lesson_id=${lessonId}，batch=2，batches=2）给剩下 6 道。每道题的 hint 和 explain 各不超过 20 个汉字。第二批交出去这一轮就结束，正文留空，不要再写字。`,
-  ].join("\n");
-}
-
-export interface Mistake {
-  exercise: Exercise;
-  /** 孩子第一次的答案（原样）。 */
-  answer: string;
-}
-
-export interface SettlementInput {
-  label: string;
-  firstCorrect: number;
-  scored: number;
-  durationMs: number;
-  mistakes: Mistake[];
-  next: LessonRequest | null;
-}
 
 export function formatDuration(ms: number): string {
   const seconds = Math.max(0, Math.round(ms / 1000));
@@ -433,40 +405,119 @@ export function formatDuration(ms: number): string {
   return m > 0 ? `${m} 分 ${s} 秒` : `${s} 秒`;
 }
 
-/** 【结算】W4：这一关的成绩 + 错过的题 + 下一关，agent 回一句点评再出下一关。 */
-export function settlementMessage(input: SettlementInput): string {
-  const lines = [
-    `【结算】${input.label}做完了：首次答对 ${input.firstCorrect} / ${input.scored}，用时 ${formatDuration(input.durationMs)}。`,
-  ];
+export interface Mistake {
+  exercise: Exercise;
+  /** 学员第一次的答案（原样）。 */
+  answer: string;
+  /** 错在哪一关（`english-path.ts` 的 `stopLabel`）。 */
+  where?: string;
+}
+
+/** 一道错题写成一行：在哪一关（有的话）+ 题 + 学员的答案。 */
+function mistakeLine(m: Mistake, n: number): string {
+  const where = m.where ? `${m.where}，` : "";
+  return `${n}. ${where}${describeExercise(m.exercise)}；学员的答案「${m.answer || "（空）"}」`;
+}
+
+/** 【出题】里最多带几道错题：太多了 prompt 变长、出题变慢，最近的这些足够说明该补什么。 */
+export const GENERATE_MISTAKE_LIMIT = 12;
+
+/** 每一关都要用到语音合成（听音选词）和语音转写（跟读），单元 3 生成的关也一样。 */
+export interface VoiceCoverage {
+  listen: number;
+  read: number;
+}
+
+export function voiceCoverage(content: Pick<LessonContent, "exercises">): VoiceCoverage {
+  return {
+    listen: content.exercises.filter((e) => e.type === "listen_choice").length,
+    read: content.exercises.filter((e) => e.type === "read_aloud").length,
+  };
+}
+
+/**
+ * 页面这一侧的守卫：生成的一关里至少有一道听音选词（TTS）和一道跟读（读例句用 TTS，读的录音走
+ * 平台转写）。CLAUDE.md 让它各出 2 道；这里只卡「至少 1」，缺了就当这一关没出成、重出。
+ * 不在 MCP 的 present_lesson 里卡：工具的校验是两个场景共用的，前端这一层已经足够挡住不合格的关。
+ */
+export function meetsVoiceRequirement(content: Pick<LessonContent, "exercises">): boolean {
+  const { listen, read } = voiceCoverage(content);
+  return listen >= 1 && read >= 1;
+}
+
+export interface GenerateRequest {
+  /** `english-path.ts` 的 `stopLabel`（单元 3 的某一关）。 */
+  label: string;
+  /** 页面给这一关起的编号，agent 原样抄进 present_lesson 的 lesson_id。 */
+  lessonId: string;
+  /** 到目前为止的错题，最近的在前；调用方截到 `GENERATE_MISTAKE_LIMIT` 道以内。 */
+  mistakes: Mistake[];
+}
+
+/**
+ * 【出题】：后台出单元 3 的一关。学员这时在做单元 1、2，不在等它，所以一批出齐（batches=1），
+ * 不分两批。没有错题就出单元 1、2 的综合练习。
+ */
+export function generateLessonMessage({ label, lessonId, mistakes }: GenerateRequest): string {
+  const lines = [`【出题】${label}`, `lesson_id：${lessonId}`];
+  if (mistakes.length === 0) {
+    lines.push("学员在单元 1、2 错过的题：没有。按单元 1、2 的语法点和话题出一关综合练习。");
+  } else {
+    lines.push(`学员在单元 1、2 错过的题（最近的在前，共 ${mistakes.length} 道）：`);
+    mistakes.forEach((m, i) => lines.push(mistakeLine(m, i + 1)));
+  }
+  lines.push(
+    `调一次 present_lesson（lesson_id=${lessonId}，batch=1，batches=1），把这一关的 8 道一批出齐：听音选词、拼句、填空、跟读各 2 道。每道题的 hint 和 explain 各不超过 20 个汉字。这一轮只调这一次工具，调用之前和之后都不写字：不写「出好了」，不总结题目；一定要回一句就只回 OK。`,
+  );
+  return lines.join("\n");
+}
+
+export interface LessonResult {
+  label: string;
+  firstCorrect: number;
+  scored: number;
+}
+
+export interface UnitReviewInput {
+  /** `english-path.ts` 的 `unitLabel`。 */
+  unitLabel: string;
+  /** 这个单元做过的每一关（按路径顺序）。 */
+  lessons: LessonResult[];
+  /** 这个单元错过的题，最近的在前。 */
+  mistakes: Mistake[];
+  /** 这是不是最后一个单元（单元 3）：前两个单元的点评可以说「单元 3 会照这些错题出」。 */
+  last: boolean;
+}
+
+/** 【单元结算】：一个单元的五关都做完了，agent 写一两句点评，不调工具。 */
+export function unitReviewMessage(input: UnitReviewInput): string {
+  const lines = [`【单元结算】${input.unitLabel}做完了。`];
+  lines.push(
+    `各关首次答对：${input.lessons.map((l) => `${l.label} ${l.firstCorrect} / ${l.scored}`).join("；")}。`,
+  );
   if (input.mistakes.length === 0) {
-    lines.push("错过的题：没有，全对。");
+    lines.push("这个单元错过的题：没有，全对。");
   } else {
-    lines.push("错过的题：");
-    input.mistakes.forEach((m, i) => {
-      lines.push(`${i + 1}. ${describeExercise(m.exercise)}；孩子的答案「${m.answer || "（空）"}」`);
-    });
+    lines.push("这个单元错过的题：");
+    input.mistakes.forEach((m, i) => lines.push(mistakeLine(m, i + 1)));
   }
-  if (input.next) {
-    lines.push(`下一关：${input.next.label}，要练：${input.next.goal}`);
-    lines.push(
-      `先回一句中文点评，再调 present_lesson（lesson_id=${input.next.lessonId}，batch=1，batches=1）把下一关的 8 道一批出齐，下一关要专门练到上面错过的点。每道题的 hint 和 explain 各不超过 20 个汉字。调完这一轮就结束，不要再写字。`,
-    );
-  } else {
-    lines.push("这是最后一关，只回一句中文点评，不用出下一关。");
-  }
+  lines.push(
+    input.last
+      ? "整门课做完了。回一两句中文点评：具体说做得好的地方，再指出最该接着练的一个点。不调工具。"
+      : "回一两句中文点评：具体说这个单元做得好的地方，再指出最该再练的一个点（单元 3 会照错题出题）。不调工具。",
+  );
   return lines.join("\n");
 }
 
 /**
- * 结算点评框里显示的那一段：回合正文的**第一段**。【结算】要的是「一句点评 + 调工具」，模型有时
- * 在调完工具后再补一段（「下一关出好了」这类），那一段不进点评框。
- * 服务端按 text part 用空行拼正文（`turn-parts.ts` 的 `renderTurn`），第一段就是工具调用之前写的那段。
+ * 点评框里显示的那一段：回合正文的**第一段**。模型偶尔在点评之后再补一段，
+ * 那一段不进点评框。服务端按 text part 用空行拼正文（`turn-parts.ts` 的 `renderTurn`）。
  */
 export function reviewText(replyText: string | undefined): string {
   return (replyText ?? "").split(/\n\s*\n/).map((part) => part.trim()).find(Boolean) ?? "";
 }
 
-/** 【为什么】W2：孩子答错后要讲解。 */
+/** 【为什么】：学员答错后要讲解。 */
 export function whyMessage(exercise: Exercise, answer: string, position: number): string {
-  return `【为什么】第 ${position} 题，${describeExercise(exercise)}。孩子的答案是「${answer || "（空）"}」。用一两句中文讲为什么，不调工具、不出新题。`;
+  return `【为什么】第 ${position} 题，${describeExercise(exercise)}。学员的答案是「${answer || "（空）"}」。用一两句中文讲为什么，不调工具、不出新题。`;
 }

@@ -35,12 +35,15 @@ export default function Home() {
           <div className="hero-copy">
             <span className="eyebrow">AgentHub Showcase</span>
             <h1>
-              把 Agent 当成
+              在 AgentHub 上
               <br />
-              产品的一部分来交付
+              运行的 Agent
             </h1>
+            <p className="hero-sub">
+              {SCENARIOS.length} 个场景、{agents} 个 Agent 都在线运行，可以在页面上直接操作。它们演示平台的几项能力：用文件定义 Agent、经流水线发布、用生成式 UI 渲染结果。
+            </p>
             <p>
-              下面每个场景都在真实运行：Agent 的定义是仓库里的文件，经流水线发布；它在隔离沙箱里调用真实的业务工具，再用生成式 UI 把结果渲染成可以查看和操作的界面。手机可以直接操作，旁边写明这一幕用到了平台的哪些能力，以及每项能力在仓库里的出处。
+              多数 Agent 在隔离沙箱里调用业务工具；情景对话的 Agent 不建沙箱，用的是 live 运行时。每个演示页旁边写明这一幕用到了平台的哪些能力，以及每项能力在仓库里的出处。
             </p>
             <div className="hero-actions">
               <a className="btn btn-primary btn-lg" href={`/showcase/${SCENARIOS[0].id}`}>

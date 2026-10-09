@@ -4,8 +4,9 @@
  * 对话引擎，各个 case 的手机 App 共用。三个真相来源分开：
  *
  * - SSE 只管「跑的时候看到什么」——工具轨迹、卡片、逐字正文，不带生命周期语义。
- * - `POST /api/agenthub/turn`（服务端 await waitForTurn）是权威，返回后整体替换
- *   流式画的内容，所以掉线最多损失动画。
+ * - 终态是权威：`POST /api/agenthub/turn` 派发并最多等 N 秒，没到终态就接着问
+ *   `/api/agenthub/turn-result`（每次也最多 N 秒，`lib/agenthub/turn-result-poll.ts`），
+ *   拿到后整体替换流式画的内容，所以掉线最多损失动画。
  * - `GET /api/agenthub/session/<id>` 只管就绪。沙箱启动期间输入框可用，就绪后
  *   自动发出——让人对着禁用的输入框等 20 秒不是安全性，是糟糕的第一印象。
  *
@@ -21,8 +22,17 @@ import { voiceErrorMessage } from "@/lib/agenthub/voice-errors";
 import type { TurnCard } from "@/lib/agenthub/turn-parts";
 import { cardsFromEnvelope, parseUiEnvelope } from "@/lib/agenthub/turn-parts";
 import { describeTool, type ToolKind } from "@/lib/agenthub/tool-labels";
+import {
+  pollTurnResult,
+  runTextTurn,
+  SESSION_LOST,
+  settledAgentMessage,
+  type JsonReply,
+  type TurnResult,
+} from "@/lib/agenthub/turn-result-poll";
 import { asStreamChunk, type StreamFrame } from "@/lib/agenthub/stream-chunks";
 import { clearPrewarmHandle, readPrewarmHandle } from "@/lib/agenthub/prewarm-handle";
+import { ensureVisitor, noteVisitorTag } from "@/lib/showcase/visitor";
 import type { CapabilitySignal } from "@/lib/showcase/capabilities";
 
 /** 跨 agent 预热事件：prewarm-hit / prewarm-miss 由本 hook 在 start() 里发出；
@@ -89,6 +99,8 @@ export type SessionPhase =
 export interface AskOutcome {
   ok: boolean;
   status?: string;
+  /** 这一轮的回合 id（派发成功才有）。英语小课用它记下单元 3 那一关是哪一轮出的（取读音时要）。 */
+  turnId?: string;
   replyText?: string;
   cards?: TurnCard[];
   code?: string;
@@ -126,8 +138,6 @@ export interface Conversation {
   sessionId: string | null;
   /** 这条会话在 AgentHub 门户里的落点（Sessions 主视图带 inspector）；服务端没配 projectId 时是 null。 */
   portalHref: string | null;
-  /** 这次会话的终端用户身份：命中预热池时是平台铸的 EUID，否则是页面传入的访客 id。 */
-  userId: string | null;
   messages: Message[];
   /** A turn is in flight (or queued waiting for the sandbox). */
   busy: boolean;
@@ -144,9 +154,6 @@ export interface Conversation {
 
 interface Options {
   agent: AgentKey;
-  /** 页面自己的访客身份。购物侧只在会话没拿到平台 EUID 时作为冷启回退用；会话真正
-   *  用的身份以返回的 `userId` 为准。 */
-  endUserId?: string | null;
   /** 某个能力被真的观察到时触发，绝不预判。 */
   onSignal?: (signal: ConversationSignal, detail?: string) => void;
   /** 一轮结束——agent 可能写过购物车或记忆。 */
@@ -156,6 +163,11 @@ interface Options {
    * 孩子在等第一关，轮询间隔直接叠在等待上。其它视角不变。
    */
   readyPollMs?: number;
+  /**
+   * 建会话前要不要先看本 agent 的预热句柄（默认要）。英语小课的第二个会话（专跑后台出题）
+   * 传 false：句柄是给主会话准备的，两个实例都去采纳会抢同一个会话。
+   */
+  usePrewarmHandle?: boolean;
 }
 
 let idSeq = 0;
@@ -169,11 +181,23 @@ const nextId = () => `m${++idSeq}`;
  */
 export const EMPTY_TRANSCRIPT_TEXT = "（没听清）";
 
-export function useAgentConversation({ agent, endUserId, onSignal, onSettled, readyPollMs = 1500 }: Options): Conversation {
+/** 读一次 turn-result（服务端最多挂 N 秒，没到终态回 `pending`）。 */
+async function readTurnResult(sid: string, turnId: string): Promise<JsonReply> {
+  const query = `sessionId=${encodeURIComponent(sid)}&turnId=${encodeURIComponent(turnId)}`;
+  const res = await fetch(`/api/agenthub/turn-result?${query}`);
+  return { httpStatus: res.status, body: (await res.json().catch(() => ({}))) as TurnResult };
+}
+
+export function useAgentConversation({
+  agent,
+  onSignal,
+  onSettled,
+  readyPollMs = 1500,
+  usePrewarmHandle = true,
+}: Options): Conversation {
   const [phase, setPhase] = useState<SessionPhase>("idle");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [portalHref, setPortalHref] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [busy, setBusy] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -186,6 +210,8 @@ export function useAgentConversation({ agent, endUserId, onSignal, onSettled, re
   const lastSeqRef = useRef(0);
   const chatSessionIdRef = useRef<string>("");
   const startedRef = useRef(false);
+  /** 连着重建了几次；会话上有一次请求验过归属就清零。 */
+  const rebuildsRef = useRef(0);
   const signalRef = useRef(onSignal);
   const settledRef = useRef(onSettled);
   signalRef.current = onSignal;
@@ -226,14 +252,19 @@ export function useAgentConversation({ agent, endUserId, onSignal, onSettled, re
         // /api/agenthub/session/prewarm 为这个身份预建了本 agent 的会话。先查平台
         // 当前状态：ready 直接采纳；还在启动/建就交给轮询 effect 接管；只有明显
         // 失败（404/failed/恢复中）才清掉句柄走下面的正常冷启。
-        if (endUserId) {
-          const handle = readPrewarmHandle(agent, endUserId);
+        //
+        // 先拿到访客 cookie 再建会话（先有 ahv，再发首个回合和预热）。页面挂载时已经
+        // 发过，这里多半是现成的。拿不到也照建：只有购物会话读身份，它自己会签一个。
+        const tag = await ensureVisitor();
+        if (tag && usePrewarmHandle) {
+          const handle = readPrewarmHandle(agent, tag);
           if (handle) {
             const waitMs = Date.now() - handle.createdAt;
             try {
               const res = await fetch(`/api/agenthub/session/${handle.sessionId}`);
-              // 该路由对错误只回 409/422/500（errorResponse），从不 404：任何非 2xx 都当
-              // 「预热会话不可用」，绝不能把错误响应的 undefined status 当成「启动中」采纳。
+              // 任何非 2xx 都当「预热会话不可用」，绝不能把错误响应的 undefined status 当成「启动中」
+              // 采纳。404 `session_not_found` = 这个浏览器没有它的归属 cookie（清过 cookie、过期、
+              // 部署前写下的句柄），同样清掉句柄走正常建会话。
               if (!res.ok) {
                 signal("prewarm-miss", `预热的会话不可用（HTTP ${res.status}）`);
                 clearPrewarmHandle(agent);
@@ -244,7 +275,6 @@ export function useAgentConversation({ agent, endUserId, onSignal, onSettled, re
                 };
                 if (data.status === "ready" && !data.pendingRevival) {
                   setSessionId(handle.sessionId);
-                  setUserId(handle.userId);
                   setPhase("ready");
                   signal("session-created", handle.sessionId);
                   signal("prewarm-hit", `${agent} 预热于 ${Math.round(waitMs / 1000)}s 前，等待 ${waitMs}ms`);
@@ -254,7 +284,6 @@ export function useAgentConversation({ agent, endUserId, onSignal, onSettled, re
                 }
                 if (typeof data.status === "string" && !data.pendingRevival && data.status !== "failed") {
                   setSessionId(handle.sessionId);
-                  setUserId(handle.userId);
                   setPhase("starting");
                   signal("prewarm-hit", "采用启动中的预热会话");
                   clearPrewarmHandle(agent);
@@ -278,7 +307,6 @@ export function useAgentConversation({ agent, endUserId, onSignal, onSettled, re
           body: JSON.stringify({
             agent,
             chatSessionId: chatSessionIdRef.current,
-            ...(endUserId ? { endUserId } : {}),
           }),
         });
         if (res.status === 501) {
@@ -288,7 +316,7 @@ export function useAgentConversation({ agent, endUserId, onSignal, onSettled, re
         const data = (await res.json()) as {
           agentHubSessionId?: string;
           status?: string;
-          userId?: string;
+          visitorTag?: string;
           detail?: string;
         };
         if (!data.agentHubSessionId) {
@@ -297,7 +325,8 @@ export function useAgentConversation({ agent, endUserId, onSignal, onSettled, re
           return;
         }
         setSessionId(data.agentHubSessionId);
-        if (data.userId) setUserId(data.userId);
+        // 购物会话采纳平台 EUID 后访客身份换成了 EUID，代号跟着换。
+        if (data.visitorTag) noteVisitorTag(data.visitorTag);
         signal("session-created", data.agentHubSessionId);
         // A session leased from the prewarming pool is `ready` in the create response
         // itself; there is nothing to poll for (the platform has no readiness push —
@@ -314,7 +343,32 @@ export function useAgentConversation({ agent, endUserId, onSignal, onSettled, re
         setError(err instanceof Error ? err.message : String(err));
       }
     })();
-  }, [agent, endUserId, signal]);
+  }, [agent, signal, usePrewarmHandle]);
+
+  /**
+   * 会话丢了（`SESSION_LOST`：归属没验过，会话本身可能还在，只是证明不了是自己的）就换一个新的，不让页面
+   * 停在转圈或白屏上。`resend` = 被拒的那句话，新会话就绪后自动发出（同 revival 的排队）。只连着重建一次：
+   * 新会话也验不过（浏览器存不下 cookie）就停在错误态，不来回建。
+   */
+  const rebuild = useCallback(
+    (resend?: string) => {
+      setSessionId(null);
+      setPortalHref(null);
+      lastSeqRef.current = 0;
+      if (rebuildsRef.current >= 1) {
+        queuedRef.current = null;
+        setPhase("error");
+        setError("浏览器没有存下会话凭据（可能禁用了 cookie），允许本站 cookie 后刷新页面再试。");
+        return;
+      }
+      rebuildsRef.current += 1;
+      if (resend) queuedRef.current = resend;
+      push({ role: "system", id: nextId(), text: "会话凭据失效了，正在换一个新会话。" });
+      startedRef.current = false;
+      start();
+    },
+    [push, start],
+  );
 
   // Elapsed counter, running only while something is actually pending.
   useEffect(() => {
@@ -359,8 +413,14 @@ export function useAgentConversation({ agent, endUserId, onSignal, onSettled, re
           pendingRevival?: unknown;
           failureReason?: string | null;
           portalHref?: string | null;
+          error?: string;
         };
         if (stop) return;
+        if (res.status === 404 && data.error === SESSION_LOST) {
+          rebuild();
+          return;
+        }
+        if (res.ok) rebuildsRef.current = 0;
         // 门户落点拿到一次就留住，之后不覆盖成 null（服务端可能在配置空档回 null）。
         if (data.portalHref) setPortalHref(data.portalHref);
         if (data.pendingRevival) {
@@ -389,7 +449,7 @@ export function useAgentConversation({ agent, endUserId, onSignal, onSettled, re
       stop = true;
       clearInterval(timer);
     };
-  }, [sessionId, phase, signal, readyPollMs]);
+  }, [sessionId, phase, signal, readyPollMs, rebuild]);
 
   // ── SSE rendering feed ──────────────────────────────────────────────────────
 
@@ -499,22 +559,31 @@ export function useAgentConversation({ agent, endUserId, onSignal, onSettled, re
       });
 
       try {
-        const res = await fetch("/api/agenthub/turn", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ agentHubSessionId: sid, text }),
+        // 派发那一跳最多挂 N 秒，没到终态就接着问 turn-result。`pendingIdRef` 一直占到终态，SSE 照画。
+        const step = await runTextTurn({
+          post: async () => {
+            const res = await fetch("/api/agenthub/turn", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ agentHubSessionId: sid, text }),
+            });
+            return { httpStatus: res.status, body: (await res.json()) as TurnResult };
+          },
+          read: (turnId) => readTurnResult(sid, turnId),
+          now: Date.now,
         });
-        const data = (await res.json()) as {
-          status?: string;
-          turnId?: string;
-          replyText?: string;
-          cards?: TurnCard[];
-          toolCalls?: { id: string; name: string; shortName: string; failed: boolean }[];
-          error?: string;
-          detail?: string;
-        };
 
-        if (data.status === "revival_in_progress") {
+        if (step.kind === "session_lost") {
+          setMessages((prev) => prev.filter((m) => m.id !== agentMessageId));
+          pendingIdRef.current = null;
+          // `send` 来的这句话在新会话上重发；`ask` 的调用方自己排回合，交回 SESSION_REBUILDING 由它重排。
+          rebuild(requeueOnRevival ? text : undefined);
+          return { ok: false, code: "SESSION_REBUILDING", error: "会话凭据失效，正在换新会话" };
+        }
+        // 派发那一跳回了 2xx（含「正在恢复」）= 归属验过了。
+        if (step.kind === "reviving" || step.posted) rebuildsRef.current = 0;
+
+        if (step.kind === "reviving") {
           setMessages((prev) => prev.filter((m) => m.id !== agentMessageId));
           pendingIdRef.current = null;
           setPhase("reviving");
@@ -535,42 +604,24 @@ export function useAgentConversation({ agent, endUserId, onSignal, onSettled, re
         }
 
         // Authoritative rendering replaces whatever the stream drew.
-        const trace: TraceItem[] = (data.toolCalls ?? []).map((t) => {
-          const { label, kind } = describeTool(t.name);
-          return { id: t.id, label, kind, done: true };
-        });
+        const { result, turnId } = step;
         setMessages((prev) =>
-          prev.map((m) =>
-            m.id === agentMessageId && m.role === "agent"
-              ? {
-                  ...m,
-                  text: data.replyText ?? m.text,
-                  cards: data.cards ?? m.cards,
-                  trace: trace.length > 0 ? trace : m.trace,
-                  thinking: "",
-                  drafts: undefined,
-                  stage: undefined,
-                  draft: undefined,
-                  streaming: false,
-                  failed: data.status !== "completed",
-                  ...(data.turnId ? { turnId: data.turnId } : {}),
-                }
-              : m,
-          ),
+          prev.map((m) => (m.id === agentMessageId && m.role === "agent" ? settledAgentMessage(m, result, turnId) : m)),
         );
-        if ((data.cards ?? []).length > 0) signal("present-card");
+        if ((result.cards ?? []).length > 0) signal("present-card");
         // Re-emit every tool this turn actually called. The stream may have missed
         // some (a reconnect, a chunk that arrived before the sheet opened); the
         // settled turn is the authority for what ran, and the capability panel is
         // only allowed to claim what ran.
-        for (const call of data.toolCalls ?? []) signal("tool-call", describeTool(call.name).short);
+        for (const call of result.toolCalls ?? []) signal("tool-call", describeTool(call.name).short);
         settledRef.current?.();
         return {
-          ok: data.status === "completed",
-          status: data.status,
-          replyText: data.replyText,
-          cards: data.cards ?? [],
-          ...(res.ok ? {} : { code: data.error ?? `HTTP_${res.status}`, error: data.detail }),
+          ok: result.status === "completed",
+          status: result.status,
+          ...(turnId ? { turnId } : {}),
+          replyText: result.replyText,
+          cards: result.cards ?? [],
+          ...(result.error ? { code: result.error, error: result.detail } : {}),
         };
       } catch (err) {
         setMessages((prev) =>
@@ -586,31 +637,8 @@ export function useAgentConversation({ agent, endUserId, onSignal, onSettled, re
         setBusy(false);
       }
     },
-    [push, signal],
+    [push, rebuild, signal],
   );
-
-  /**
-   * 语音回合的后一半：等 agent 写完回复。`/api/agenthub/turn-result` 每次最多等 25 s，
-   * 没到终态回 `pending` 就再问一次（不挂一条会被网关空闲超时掐断的长请求）。
-   */
-  const awaitTurnResult = useCallback(async (sid: string, turnId: string) => {
-    const query = `sessionId=${encodeURIComponent(sid)}&turnId=${encodeURIComponent(turnId)}`;
-    // 8 × 25 s ≈ 3 分钟：比任何一轮正常的点评都长得多，再长就当它卡住了。
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      const res = await fetch(`/api/agenthub/turn-result?${query}`);
-      const data = (await res.json().catch(() => ({}))) as {
-        status?: string;
-        transcript?: string;
-        replyText?: string;
-        cards?: TurnCard[];
-        toolCalls?: { id: string; name: string; shortName: string; failed: boolean }[];
-        error?: string;
-      };
-      if (!res.ok) return { ...data, status: "failed", error: data.error ?? `HTTP_${res.status}` };
-      if (data.status !== "pending") return data;
-    }
-    return { status: "failed", error: "SESSION_TURN_WAIT_TIMEOUT" };
-  }, []);
 
   /**
    * 语音回合：和 `dispatch` 同一套消息管道，只是发的是一个录音而不是文本，而且**分两段**
@@ -668,6 +696,12 @@ export function useAgentConversation({ agent, endUserId, onSignal, onSettled, re
         return { ok: false, code: "NETWORK_ERROR", error: voiceErrorMessage("NETWORK_ERROR") };
       }
 
+      if (res.status === 404 && data.error === SESSION_LOST) {
+        drop();
+        rebuild();
+        return { ok: false, code: "SESSION_REBUILDING", error: voiceErrorMessage("SESSION_REBUILDING") };
+      }
+
       if (data.status === "revival_in_progress") {
         drop();
         setPhase("reviving");
@@ -686,6 +720,7 @@ export function useAgentConversation({ agent, endUserId, onSignal, onSettled, re
         return { ok: false, code, error: voiceErrorMessage(code, data.detail) };
       }
 
+      rebuildsRef.current = 0;
       const turnId = data.turnId;
       const transcript = typeof data.transcript === "string" ? data.transcript.trim() : null;
       if (transcript !== null) push({ role: "user", id: nextId(), text: transcript || EMPTY_TRANSCRIPT_TEXT });
@@ -698,29 +733,10 @@ export function useAgentConversation({ agent, endUserId, onSignal, onSettled, re
 
       const reply = (async (): Promise<VoiceReply> => {
         try {
-          const result = await awaitTurnResult(sid, turnId);
-          const trace: TraceItem[] = (result.toolCalls ?? []).map((t) => {
-            const { label, kind } = describeTool(t.name);
-            return { id: t.id, label, kind, done: true };
-          });
+          // agent 写完回复的那一半：问 turn-result 直到终态（每次最多 N 秒，`lib/agenthub/turn-result-poll.ts`）。
+          const { result } = await pollTurnResult({ read: () => readTurnResult(sid, turnId), now: Date.now });
           setMessages((prev) =>
-            prev.map((m) =>
-              m.id === agentMessageId && m.role === "agent"
-                ? {
-                    ...m,
-                    text: result.replyText ?? m.text,
-                    cards: result.cards ?? m.cards,
-                    trace: trace.length > 0 ? trace : m.trace,
-                    thinking: "",
-                    drafts: undefined,
-                    stage: undefined,
-                    draft: undefined,
-                    streaming: false,
-                    failed: result.status !== "completed",
-                    turnId,
-                  }
-                : m,
-            ),
+            prev.map((m) => (m.id === agentMessageId && m.role === "agent" ? settledAgentMessage(m, result, turnId) : m)),
           );
           if (transcript === null && typeof result.transcript === "string") {
             push({ role: "user", id: nextId(), text: result.transcript.trim() || EMPTY_TRANSCRIPT_TEXT });
@@ -746,7 +762,7 @@ export function useAgentConversation({ agent, endUserId, onSignal, onSettled, re
 
       return { ok: true, turnId, transcript, reply };
     },
-    [awaitTurnResult, push, signal],
+    [push, rebuild, signal],
   );
 
   const sendVoice = useCallback(
@@ -808,5 +824,5 @@ export function useAgentConversation({ agent, endUserId, onSignal, onSettled, re
     void dispatch(queued, sessionId);
   }, [phase, sessionId, dispatch]);
 
-  return { phase, sessionId, portalHref, userId, messages, busy, elapsed, error, start, send, ask, sendVoice };
+  return { phase, sessionId, portalHref, messages, busy, elapsed, error, start, send, ask, sendVoice };
 }

@@ -11,6 +11,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { MemoryFact } from "@/lib/backend/types";
+import { visitorPost } from "@/lib/showcase/visitor";
+
+/**
+ * subject 由服务端从访客 cookie `ahv` 取，body 里不带 `subject_id`。`visitorTag` 为 null 表示
+ * 还没拿到 cookie，先不发。
+ */
 
 export interface MemoryApi {
   facts: MemoryFact[];
@@ -19,41 +25,34 @@ export interface MemoryApi {
   clear: () => Promise<void>;
 }
 
-export function useMemory(visitorId: string | null, refreshToken: number): MemoryApi {
+export function useMemory(visitorTag: string | null, refreshToken: number): MemoryApi {
   const [facts, setFacts] = useState<MemoryFact[]>([]);
   const [busy, setBusy] = useState(false);
   const [token, setToken] = useState(0);
 
   const load = useCallback(async () => {
-    if (!visitorId) return;
-    const res = await fetch("/api/memory/get-facts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subject_id: visitorId }),
-    });
+    if (!visitorTag) return;
+    const res = await visitorPost("/api/memory/get-facts", {});
     if (!res.ok) return;
     const data = (await res.json()) as { facts?: MemoryFact[] };
     setFacts(data.facts ?? []);
-  }, [visitorId]);
+  }, [visitorTag]);
 
   useEffect(() => {
     void load();
   }, [load, token, refreshToken]);
 
   const clear = useCallback(async () => {
-    if (!visitorId) return;
+    if (!visitorTag) return;
     setBusy(true);
     try {
-      await fetch("/api/memory/clear", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subject_id: visitorId }),
-      });
-      setFacts([]);
+      // 服务端真清掉了才把面板清空：失败时面板照旧，免得显示「已清空」而记忆还在。
+      const res = await visitorPost("/api/memory/clear", {});
+      if (res.ok) setFacts([]);
     } finally {
       setBusy(false);
     }
-  }, [visitorId]);
+  }, [visitorTag]);
 
   return { facts, busy, reload: () => setToken((v) => v + 1), clear };
 }

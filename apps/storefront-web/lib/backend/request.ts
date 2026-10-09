@@ -1,10 +1,13 @@
 /** Shared request helpers for `app/api/backend/**` routes. */
 
-/** D-R3: the customer identity the stdio server's `HttpStorefrontBackend` injects
- * from its own env — never a tool argument, so it never travels through the model.
- * Defaults to `"demo-user"` to match the stdio server's own `CMA_END_USER_ID`
- * default, so a curl test against this route with no header behaves the same as an
- * unconfigured session would. */
-export function userIdFrom(req: Request): string {
-  return req.headers.get("x-cma-user") ?? "demo-user";
+import { resolveVisitor } from "./visitor-binding";
+
+/**
+ * 这个请求的访客（`lib/backend/visitor-binding.ts`）。浏览器以 `ahv` cookie 为准，自己报的
+ * `X-CMA-User` 不看；沙箱 stdio server 的 `HttpStorefrontBackend` 带不了访客 cookie，从自己的 env 取身份
+ * 放在 `X-CMA-User` 上（D-R3：不经过模型、不是工具参数），那一类只认高熵形状和 eval 身份。
+ * null = 认不出，路由回 `visitorRequired()`。之前缺 header 时落到共用的 `"demo-user"`，现在不落了。
+ */
+export function visitorFrom(req: Request): string | null {
+  return resolveVisitor(req, req.headers.get("x-cma-user"));
 }

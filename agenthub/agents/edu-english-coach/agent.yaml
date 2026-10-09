@@ -1,11 +1,11 @@
 apiVersion: agenthub/v1alpha1
 format: claude_code
 
-# 英语小课的出题 agent，界面是闯关式的课程页（路径图 + 关卡播放器）。
+# 英语小课的老师 agent，界面是闯关式的课程页（路径图 + 关卡播放器），学员是 B1 起点的青少年和成人。
 # 定位是 agent 能力的 showcase，不是完整应用：进度只存浏览器 localStorage，不建后端。
-# 它只在几个时刻出场：开一关时分两批出题（先 2 道、再 6 道）、
-# 关卡结算时点评并按错题出下一关、孩子点「为什么」时讲一题、跟读时给一句文字点评。
-# 判题、推进、音效都在页面本地，孩子作答期间不等它。
+# 课程 v2：单元 1、2 的题写死在页面里，它不出；它只在四个
+# 时刻出场——学员每做完单元 1 或 2 的一关，后台照错题出单元 3 的一关；一个单元做完写一句单元点评；
+# 学员点「为什么」时讲一题；跟读时给一句文字点评。判题、推进、音效都在页面本地，学员作答期间不等它。
 #
 # 模型走项目级「模型服务」`model`，与其余教育 agent 相同：密钥留在服务端，沙箱里只看得到
 # 本地代理。这里的 `model` 会盖掉服务里配的模型，所以要写模型服务认得的 id。
@@ -23,7 +23,7 @@ format: claude_code
 #   /api/agenthub/turn-result。
 # - 之前用的是 azure-openai-gpt-4o-mini-transcribe（输出 azure-openai-gpt-4o-mini-tts / alloy / mp3）。
 # 声明了 voice 的 agent 必须走模型网关上的模型服务（平台在创建会话时校验），本 agent 用的就是 `model`。
-# 听音题的读音走站点自建的 TTS（apps/storefront-web/app/api/tts），与这里互不影响。
+# 听音题的读音来自平台的朗读 agent edu-english-reader，与这里互不影响。
 modelService: model
 model: deepseek-v4-flash
 

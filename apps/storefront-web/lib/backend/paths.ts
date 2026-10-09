@@ -13,7 +13,12 @@ const DATA_DIR = process.env.STOREFRONT_DATA_DIR ?? join(process.cwd(), ".data")
  * package's copy — see that script for why there are two copies). */
 export const FIXTURES_DIR = join(process.cwd(), "data", "retail");
 
-export const CARTS_FILE = join(DATA_DIR, "carts.json");
-export const MEMORY_FILE = join(DATA_DIR, "memory.json");
+/**
+ * 购物车和记忆按访客 id 存。`.v2` 是换过的名：访客身份改由服务端签发（`visitor-binding.ts`）之后不迁移
+ * 旧访客，旧文件里那些 id 有的进过日志、有的在页面上显示过；换名让旧数据经任何路由都读不到，
+ * 不依赖「发布会清空 .data」这个前提。
+ */
+export const CARTS_FILE = join(DATA_DIR, "carts.v2.json");
+export const MEMORY_FILE = join(DATA_DIR, "memory.v2.json");
 export const UI_EVENTS_FILE = join(DATA_DIR, "ui-events.json");
 export const CHANGES_FILE = join(DATA_DIR, "changes.json"); // M3 contract b

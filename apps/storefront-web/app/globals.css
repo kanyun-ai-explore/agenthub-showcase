@@ -1019,6 +1019,11 @@ code {
   line-height: 1.8;
   color: var(--text-2);
 }
+.hero-copy .hero-sub {
+  font-size: 19px;
+  line-height: 1.7;
+  color: var(--text);
+}
 .hero-actions {
   display: flex;
   gap: 10px;

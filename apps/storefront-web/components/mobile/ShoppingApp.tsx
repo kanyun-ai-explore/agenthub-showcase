@@ -12,9 +12,9 @@ import type { Conversation } from "@/components/agent/useAgentConversation";
 import { ProductArt, CategoryGlyph, categoryColors } from "./ProductArt";
 import { IconBack, IconCart, IconChevron, IconGrid, IconHome, IconSearch, IconSparkle, IconStar, IconUser } from "./icons";
 import { AgentSheet } from "./AgentSheet";
+import { visitorPost } from "@/lib/showcase/visitor";
 import { useCart } from "./useCart";
 import { useMemory } from "./useMemory";
-import { visitorHeaders } from "@/lib/showcase/visitor";
 import { money, priceParts, reviewLabel } from "@/components/generative/format";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -357,13 +357,13 @@ function MeTab({
   preferences,
   orders,
   memory,
-  visitorId,
+  visitorTag,
   onForget,
 }: {
   preferences: UserPreferences | null;
   orders: Order[];
   memory: ReturnType<typeof useMemory>;
-  visitorId: string | null;
+  visitorTag: string | null;
   onForget: () => void;
 }) {
   return (
@@ -484,8 +484,9 @@ function MeTab({
 
         <div className="m-panel" style={{ padding: "12px 14px" }}>
           <div style={{ fontSize: 11.5, color: "#8a8f99", lineHeight: 1.7 }}>
-            你的访客身份 <code>{visitorId ?? "…"}</code> 由平台在会话建立时签发（命中预热池时是暖机
-            阶段生成的 EUID）。购物车和记忆都按它隔离，所以别人看到的不是你这一份。
+            你的访客代号 <code>{visitorTag ?? "…"}</code>。访客身份由站点签发，存在只有这个浏览器带得上的
+            cookie 里（会话命中预热池后换成平台的 EUID），页面上只显示代号。购物车和记忆都按身份隔离，
+            别人拿到这串代号也读不到你这一份。
           </div>
           <button
             type="button"
@@ -621,7 +622,7 @@ export function ShoppingApp({
   conversation,
   openers,
   settleToken,
-  visitorId,
+  visitorTag,
   onForget,
 }: {
   initialProducts: Product[];
@@ -632,8 +633,10 @@ export function ShoppingApp({
   openers: string[];
   /** 一轮结束时自增——agent 可能写过购物车或记忆。 */
   settleToken: number;
-  visitorId: string | null;
-  onForget: () => void;
+  /** 访客代号（HMAC）。null = 还没拿到访客 cookie，购物车和记忆先不读。 */
+  visitorTag: string | null;
+  /** 换一个身份：成功时调用方重载页面；返回 false = 服务端没签出新身份，旧身份还在。 */
+  onForget: () => Promise<boolean>;
 }) {
   const [tab, setTab] = useState<Tab>("home");
   const [detail, setDetail] = useState<string | null>(null);
@@ -646,8 +649,8 @@ export function ShoppingApp({
   const [toast, setToast] = useState<string | null>(null);
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
-  const cart = useCart(visitorId);
-  const memory = useMemory(visitorId, settleToken);
+  const cart = useCart(visitorTag);
+  const memory = useMemory(visitorTag, settleToken);
 
   useEffect(() => {
     if (settleToken > 0) cart.reload();
@@ -680,17 +683,16 @@ export function ShoppingApp({
   }, [category, initialProducts, total]);
 
   useEffect(() => {
-    if (tab !== "me" || !visitorId) return;
-    const headers = { "Content-Type": "application/json", ...visitorHeaders(visitorId) };
-    void fetch("/api/backend/preferences", { method: "POST", headers, body: "{}" })
+    if (tab !== "me" || !visitorTag) return;
+    void visitorPost("/api/backend/preferences", {})
       .then((r) => r.json())
       .then((d: { preferences?: UserPreferences }) => setPreferences(d.preferences ?? null))
       .catch(() => {});
-    void fetch("/api/backend/orders/list", { method: "POST", headers, body: "{}" })
+    void visitorPost("/api/backend/orders/list", {})
       .then((r) => r.json())
       .then((d: { orders?: Order[] }) => setOrders(d.orders ?? []))
       .catch(() => {});
-  }, [tab, visitorId]);
+  }, [tab, visitorTag]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -768,12 +770,17 @@ export function ShoppingApp({
           preferences={preferences}
           orders={orders}
           memory={memory}
-          visitorId={visitorId}
+          visitorTag={visitorTag}
           onForget={() => {
-            onForget();
-            setPreferences(null);
-            setOrders([]);
-            setToast("已换成新身份");
+            void onForget().then((ok) => {
+              if (!ok) {
+                setToast("没换成，旧身份还在，稍后再试");
+                return;
+              }
+              setPreferences(null);
+              setOrders([]);
+              setToast("已换成新身份");
+            });
           }}
         />
       )}

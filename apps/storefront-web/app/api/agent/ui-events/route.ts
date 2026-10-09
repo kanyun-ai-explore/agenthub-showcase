@@ -5,8 +5,15 @@
  * side, either polling (`?sessionId=&since=`, the default) or SSE
  * (`?sessionId=&stream=1`) — see `lib/backend/ui-events.ts` for the in-memory queue
  * both share.
+ *
+ * 归属：`GET` 要求 `sessionId` 是这个浏览器建的 AgentHub 会话
+ * （`lib/agenthub/session-binding.ts`），否则 404。队列的键是 stdio server 的
+ * `CMA_CHAT_SESSION_ID`（两个 agent 都没设，缺省 `"local-session"`，所有访客共用一条），不是平台的
+ * session id，所以按现在的配置读口一律 404——两个 agent 都是 `CMA_UI_DELIVERY: result_text`，
+ * 页面也没有调用方，读口关掉是有意的。`POST` 是沙箱的写口，带不了访客 cookie，不验。
  */
 
+import { ownsSession, sessionNotFound } from "@/lib/agenthub/session-binding";
 import { errorResponse } from "@/lib/backend/errors";
 import { eventsSince, publishUiEvent, subscribe } from "@/lib/backend/ui-events";
 
@@ -30,6 +37,8 @@ export async function GET(req: Request) {
   if (!sessionId) {
     return Response.json({ error: "bad_request", detail: "sessionId query param is required" }, { status: 400 });
   }
+  // 归属：不是这个浏览器建的会话一律 404，在调平台之前（lib/agenthub/session-binding.ts）。
+  if (!ownsSession(req, sessionId)) return sessionNotFound();
   const since = Number(url.searchParams.get("since") ?? "0") || 0;
 
   if (url.searchParams.get("stream") !== "1") {

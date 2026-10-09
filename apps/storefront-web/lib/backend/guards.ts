@@ -3,8 +3,8 @@
  *
  * `crossSiteRequest`：这是个演示站，不该成为别人页面上的免费接口。要挡的是
  * **别的站点里的页面拿用户浏览器当跳板**（同站页面、curl、服务端脚本都照常放行，
- * 所以没有 Origin 的请求一律不算跨站）。`/api/tts`、`/api/agenthub/voice-turn`、
- * `/api/agenthub/turn-audio` 三处共用这一份实现。
+ * 所以没有 Origin 的请求一律不算跨站）。`/api/course/audio`（单元 3 的读音，取代
+ * 已删掉的 `/api/tts`）、`/api/agenthub/voice-turn`、`/api/agenthub/turn-audio` 三处共用这一份实现。
  *
  * ⚠️ **不能用 `new URL(req.url).host` 当「本站」**（线上实际出过事故）：
  * 部署里 ingress 会把请求 URL 的 host 改写成 pod 内部地址，于是**同源请求也 403**

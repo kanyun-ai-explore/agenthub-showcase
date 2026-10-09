@@ -28,6 +28,7 @@ const MESSAGES: Record<string, string> = {
   SESSION_NOT_READY: "老师还没准备好，等一下再按。",
   NETWORK_ERROR: "网断了，等网络回来再试一次。",
   SESSION_REVIVING: "会话正在恢复，恢复好再按一次。",
+  SESSION_REBUILDING: "会话凭据失效了，正在换一个新会话，好了再按一次。",
   // 服务端 waitForTurn 的截止（120 s）；转写那一段也有自己的 15 s 超时，但那是平台内部的。
   SESSION_TURN_WAIT_TIMEOUT: "老师这次回得太慢了，再按一次试试。",
 };

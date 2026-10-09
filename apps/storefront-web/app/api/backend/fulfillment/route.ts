@@ -1,6 +1,7 @@
 import { findProduct, loadCatalog, loadUsers, preferencesOf } from "@/lib/backend/catalog";
 import { errorResponse } from "@/lib/backend/errors";
-import { userIdFrom } from "@/lib/backend/request";
+import { visitorFrom } from "@/lib/backend/request";
+import { visitorRequired } from "@/lib/backend/visitor-binding";
 import type { FulfillmentOption } from "@/lib/backend/types";
 
 const FREE_SHIPPING_OVER = 49;
@@ -16,11 +17,13 @@ function pickupEta(): string {
 }
 
 export async function POST(req: Request) {
+  const userId = visitorFrom(req);
+  if (!userId) return visitorRequired();
   try {
     const { product_ids } = (await req.json()) as { product_ids: string[] };
     const catalog = await loadCatalog();
     const users = await loadUsers();
-    const preferences = preferencesOf(users, userIdFrom(req));
+    const preferences = preferencesOf(users, userId);
     const location = preferences.default_location ?? "your area";
     const quoted = product_ids.map((id) => findProduct(catalog, id)).filter((p): p is NonNullable<typeof p> => !!p);
 

@@ -114,6 +114,10 @@ my cart」，模型调 `get_cart` 看到三件手工测试留下的无关商品�
 固定数据里补了 `eval-user`，偏好和订单镜像自 `demo-user`（订单号加 `-E` 后缀），
 所以读侧用例仍有历史可用，只有购物车是它自己的。
 
+（后来网页访客的身份改由站点签发、放在 httpOnly 的 `ahv` cookie 里，不再由页面传；沙箱回调带的
+`X-CMA-User` 只认平台 EUID 形状和 `eval-user`，`demo-user` 只在非 prod 认。见
+`apps/storefront-web/lib/backend/visitor-binding.ts`。）
+
 **教训的一般形状**：把一个 agent 从内嵌 mock 切到共享后端，改的不只是数据来源，
 是**状态的生命周期**——从「每会话一份」变成「全局一份且持久」。凡是依赖干净初始状态的
 东西（评测首当其冲）都会被这个改动波及，而波及的方式是「模型看到了不该看到的上下文，
