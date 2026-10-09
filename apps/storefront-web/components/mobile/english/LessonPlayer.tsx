@@ -3,7 +3,7 @@
 /**
  * 关卡播放器：一屏一题。
  *
- * 孩子的每个操作都在本地有即时反馈，不等 agent：选了就亮、「检查」点下去判定条和音效
+ * 学员的每个操作都在本地有即时反馈，不等 agent：选了就亮、「检查」点下去判定条和音效
  * 同一帧出来、「继续」直接进下一题（题都在本地）。agent 只在两处露面，都不挡「继续」：
  * - 答错时后台先要讲解，判定条上的「为什么」点了才显示（W2）；
  * - 跟读的语音回合：转写回来立刻画逐词比对，文字点评后到，「看点评」点了才显示（W3）。
@@ -12,7 +12,7 @@
  * 分批到的一关（冷启那一关先到 2 道）：后面的题到了就接上；第一批做完了后面的还没到，
  * 就放占位等着（阶段提示同样来自事件流）。
  *
- * 孩子走到过的题不再换（`lockReached`）：草稿被拒后重调、两批并行发出、回合终态的
+ * 学员走到过的题不再换（`lockReached`）：草稿被拒后重调、两批并行发出、回合终态的
  * 权威结果和草稿不一样时，只有他还没看到的题会变。结算用的也是他看到的那一份（`onFinish`
  * 把它交出去），错题不会挂到别的题上。
  */
@@ -80,6 +80,7 @@ export function LessonPlayer({
   channel,
   speech,
   canAskAgent,
+  onFirstQuestion,
   onExit,
   onFinish,
 }: {
@@ -89,15 +90,17 @@ export function LessonPlayer({
   speech: Speech;
   /** 会话能不能找 agent（没接上时不显示「为什么」「看点评」，只给题目自带的提示）。 */
   canAskAgent: boolean;
+  /** 第一题画出来、可以作答的那一帧（「点开 → 第一题可答」的终点）。 */
+  onFirstQuestion?: () => void;
   onExit: () => void;
-  /** 做完了：作答记录 + 孩子实际看到的那份题（错题按它对）。 */
+  /** 做完了：作答记录 + 学员实际看到的那份题（错题按它对）。 */
   onFinish: (state: PlayerState<Answer>, exercises: readonly Exercise[]) => void;
 }) {
   const [player, setPlayer] = useState(() =>
     startPlayer<Answer>(content.exercises.length, Date.now(), !content.complete),
   );
 
-  // 孩子走到过的题锁住，后面的位置用新来的。render 里写 ref：只增不减，同样的输入得到同样的
+  // 学员走到过的题锁住，后面的位置用新来的。render 里写 ref：只增不减，同样的输入得到同样的
   // 结果，重复 render 无害。
   const lockedRef = useRef<Exercise[]>([]);
   const index = currentIndex(player);
@@ -130,13 +133,25 @@ export function LessonPlayer({
   const feedbackKey = voiceKey ? `${voiceKey}:feedback` : null;
   const checkedVoiceKey = index === null ? null : `${runId}:${index}:${attemptNo - 1}`;
 
-  // 结束：交给外面结算（交出去的是孩子实际看到的那份题）。
+  // 结束：交给外面结算（交出去的是学员实际看到的那份题）。
   const finishedRef = useRef(false);
   useEffect(() => {
     if (player.stage !== "done" || finishedRef.current) return;
     finishedRef.current = true;
     onFinish(player, exercises);
   }, [player, onFinish, exercises]);
+
+  // 第一题画出来的那一帧报一次（等下一帧，量到的是画出来，不只是算出来）。回调走 ref：调用方传的
+  // 是内联函数，每次 render 都换身份，挂进依赖会让 cleanup 把还没触发的那一帧取消掉。
+  const onFirstQuestionRef = useRef(onFirstQuestion);
+  onFirstQuestionRef.current = onFirstQuestion;
+  const firstReportedRef = useRef(false);
+  const hasQuestion = Boolean(exercise) && player.stage === "answering";
+  useEffect(() => {
+    if (firstReportedRef.current || !hasQuestion) return;
+    firstReportedRef.current = true;
+    requestAnimationFrame(() => onFirstQuestionRef.current?.());
+  }, [hasQuestion]);
 
   // 听音题一出来就自动念一遍（「继续」是一次点击，浏览器放行自动播放）。
   const playedRef = useRef<string | null>(null);
@@ -196,7 +211,9 @@ export function LessonPlayer({
   // 等后面的批次；或者这一帧下标还落在没有题的位置（上面的 effect 下一帧就会收掉）——
   // 两种都画占位，留着 ✕，不返回 null 让整屏空白。
   if (player.stage === "waiting" || player.stage === "done" || !exercise || index === null) {
-    const live = channel.live;
+    // 后面的题由正在出题的那一件给（出题多半跑在第二个会话上，见 useLessonChannel 的 lessonLive）；
+    // 主会话那条道上跑的可能是一条讲解，它的阶段不是这里要显示的。
+    const live = channel.lessonLive;
     return (
       <div className="en-play">
         <PlayTop onExit={onExit} ratio={progressRatio(player, LESSON_SIZE)} combo={player.combo} />
@@ -293,6 +310,8 @@ export function LessonPlayer({
               if (voiceKey && feedbackKey) channel.sendVoice(voiceKey, feedbackKey, take);
             }}
             onSkip={() => {
+              // 录音还排着就不发了（在发的那次停不下来，回来时题已经换了，不会再用）。
+              if (voiceKey) channel.skipVoice(voiceKey);
               channel.leaveQuestion(null);
               setPlayer((state) => skip(state, Date.now()));
             }}
@@ -494,7 +513,7 @@ function ListenChoice({
           </button>
         </div>
       </div>
-      {speech.source === "browser" ? <div className="en-tts-tag">本机语音（站点 TTS 这次没放出来）</div> : null}
+      {speech.source === "browser" ? <div className="en-tts-tag">本机语音（平台读音这次没取到）</div> : null}
       <div className="en-options">
         {exercise.options.map((option, i) => (
           <button

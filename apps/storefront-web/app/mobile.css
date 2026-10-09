@@ -1695,8 +1695,6 @@
   gap: 14px;
 }
 .en-map-top { padding: 4px 22px 8px; }
-/* 情景对话没有状态栏：顶栏让出状态栏那 44px，不压在屏幕圆角里 */
-.en-app > .en-top:first-child { padding-top: 50px; }
 .en-flag { display: block; border-radius: 7px; }
 .en-hud { display: flex; gap: 14px; flex: none; }
 .en-hud-item {
@@ -2438,10 +2436,11 @@
   background: #fff;
 }
 
-/* 小结卡：盖住整台手机的覆盖层（`.m-app` 是定位祖先），内容比一屏长，自己滚 */
+/* 小结卡：盖住状态栏以下整块屏的覆盖层（`.m-app` 是定位祖先），内容比一屏长，自己滚。
+   上沿让出状态栏（`.en-status` 的 44px），和英语小课的结算页一样，状态栏一直在。 */
 .rp-summary {
   position: absolute;
-  inset: 0;
+  inset: 44px 0 0;
   z-index: 80;
   background: #fff;
   display: flex;

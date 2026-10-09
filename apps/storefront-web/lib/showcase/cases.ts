@@ -385,22 +385,22 @@ agentOptions:
     id: "language",
     name: "语言学习",
     icon: "语",
-    blurb: "两种练英语的方式：英语小课按闯关式的路径图一关一关做题，每关的题由 Agent 现场出；情景对话按住说英语，跟咖啡店店员聊几句。",
+    blurb: "这个场景展示 AgentHub 的两种语音形态：英语小课是文字和语音互转，听音题和例句的读音由语音合成生成，跟读的录音由平台转写成文字；情景对话是 Agent 实时语音对话，店员是一个不建沙箱的 live Agent，你按住说英语，他用语音回答。",
     surfaces: [
       {
         id: "english-course",
         name: "英语小课",
-        persona: "一年级学生",
-        tagline: "一关的题由 Agent 现场出，下一关照你错过的题出",
+        persona: "青少年和成人",
+        tagline: "读音由平台合成，跟读由平台转写成文字",
         intro:
-          "这里做了一套闯关式的课程页：路径图上一个单元四关，点一关进去是一屏一题。选、拼、检查、继续都在页面本地完成，判定条和音效当场出来，不等模型。Agent 只在几个时刻出场：开一关时调 present_lesson 分两批交题（先 2 道、再 6 道），第 1 批的 2 道一到就能答；做完一关，页面把对错汇总发给它，它回一句点评，并在同一轮里照你错过的点出下一关；答错后点「为什么」才显示它的讲解；跟读题按住读一句，松手后页面先量一下音量，几乎无声的一段不发送，也不占每分钟 10 次的额度，只提示「没听到声音，按住再读一次」；有声音才走平台的语音回合，先把录音转写成文字，页面立刻逐词比对（读对绿、读错红、漏读灰），它的文字点评要点「看点评」才显示。会话同一时刻只跑一个回合，这些请求在页面里排队。听音题的读音由站点自建的 TTS 合成，题一到就预取。跟读不打发音分（转写会顺手纠错，结果偏乐观）。通关、XP 和连胜只写在这台设备的浏览器里，这个视角的定位是能力的 showcase，不是完整应用。",
+          "这个视角展示文字和语音互转。文字转语音：听音题的读音和跟读题的例句都由平台合成。合成用的是一个只做原样复述的朗读 Agent（edu-english-reader，format: live，只声明 voice.output，qwen3-tts-flash）：一句英文发给它，它原样回这一句，平台把回复合成成语音。单元 1、2 的读音由平台预生成、存成静态文件，打开就能播；单元 3 的读音在课中由站点经这个 Agent 运行时合成，回合正文和原文逐字相等才用。两边都取不到时退到浏览器本机语音，题上会标明。语音转文字：跟读题按住读一句，松手后页面先量一下音量，几乎无声的一段不发送，也不占每分钟 10 次的额度，只提示「没听到声音，按住再读一次」；有声音才走平台的语音回合，平台先用 qwen3-asr-flash 把录音转写成文字，页面立刻逐词比对（读对绿、读错红、漏读灰），Agent 的文字点评要点「看点评」才显示。跟读不打发音分（转写会顺手纠错，结果偏乐观）。课程是闯关式的：三个单元各五关，难度从 CEFR B1 起点开始，面向青少年和成人，讲解用中文；点一关进去是一屏一题。选、拼、检查、继续都在页面本地完成，判定条和音效当场出来，不等模型。单元 1、2 的题是写死的，所有人一样，点开就能答。单元 3 在上课过程中生成：你每做完单元 1 或 2 的一关，页面就在后台把到这一刻为止的错题发给 Agent，它调 present_lesson 出单元 3 的一关，专门练你错过的点；单元 2 做完单元 3 才解锁，到那时题一般已经出好。Agent 另外只在三处出场：答错后点「为什么」才显示它的讲解，跟读后的一句文字点评，一个单元做完时的一句单元点评。单元 3 的出题跑在第二个会话上，讲解、跟读、单元点评在主会话上，两边互不排队；第二个会话建不起来时，全部回到主会话排一个队。通关、XP、连胜、错题和单元 3 的题只写在这台设备的浏览器里，这个视角的定位是能力的 showcase，不是完整应用。",
         agent: "english-coach",
         app: "english",
         meta: [
           { label: "Agent", value: "edu-english-coach" },
-          { label: "出题", value: "整关出题（present_lesson）" },
-          { label: "下一关", value: "照上一关的错题出" },
-          { label: "语音回合", value: "跟读转写 + 文字点评" },
+          { label: "文字转语音", value: "单元 1、2 预生成，单元 3 运行时合成" },
+          { label: "语音转文字", value: "跟读，经平台语音回合" },
+          { label: "出题", value: "单元 3 按错题生成（present_lesson）" },
           { label: "进度", value: "只存本机 localStorage" },
         ],
         // 没有列「记忆」：这个 agent 的工具面只有 Skill + mcp__course（见 agent.yaml 的
@@ -408,11 +408,11 @@ agentOptions:
         // 点亮判据沿用的是基表里的 save_memory / recall_memories ——在这个视角上永远亮不了。
         // 摆一条亮不起来的卡，等于替它说一句自己核不到的话。数学课/语文课两处 memory override
         // 也有同一问题，还没改。
-        capabilities: ["file-agent", "sandbox", "mcp", "generative-ui", "session-turn", "stream", "config-values", "voice-turn"],
+        capabilities: ["voice-turn", "file-agent", "sandbox", "mcp", "generative-ui", "session-turn", "stream", "config-values"],
         capabilityOverrides: {
           "file-agent": { evidence: "agenthub/agents/edu-english-coach/agent.yaml + CLAUDE.md" },
           mcp: {
-            blurb: "出题就是 MCP 调用：present_lesson 把一批题作为一个数组交给页面（开一关分两批，结算时把下一关一批出齐）。这个课程 MCP 和在线教育那五个 Agent 挂的是同一个，跨两个场景共用。出题和查订单、读周报在平台上没有区别。",
+            blurb: "出题就是 MCP 调用：present_lesson 把一关的 8 道题作为一个数组交给页面，单元 3 的每一关一次出齐。这个课程 MCP 和在线教育那五个 Agent 挂的是同一个，跨两个场景共用。出题和查订单、读周报在平台上没有区别。",
             evidence: "present_lesson({ lesson_id, batch, batches, exercises: [...] }) · mcpServers: vcrd_…（与在线教育同一个）",
           },
           "generative-ui": {
@@ -420,12 +420,13 @@ agentOptions:
             evidence: 'present_lesson → { component: "lesson", payload: { exercises } }',
           },
           stream: {
-            blurb: "讲解、点评点开时如果还在生成，就接会话的事件流逐字显示；出题时按流的阶段（准备 / 在想 / 在写题）给等待提示，第一批题的入参一到就开答。回合结束仍由 waitForTurn 判定。",
+            blurb: "讲解、点评点开时如果还在生成，就接会话的事件流逐字显示；单元 3 的题还没出好时，按流的阶段（准备 / 在想 / 在写题）给等待提示，题的入参一到就能开答。回合结束仍由 waitForTurn 判定。",
             evidence: "sessions.streamEvents → /api/agenthub/stream",
           },
           "voice-turn": {
             blurb:
-              "跟读这一题是语音回合：按住录一段（几乎无声的一段在页面上就拦下、不发），平台先转写成文字再交给 Agent（它拿到的和打字一样）。站点派发后立刻把转写交回页面，逐词比对当场画出来；Agent 的一句文字点评后到，不挡「继续」。"
+              "跟读这一题是语音回合：按住录一段（几乎无声的一段在页面上就拦下、不发），平台先用 qwen3-asr-flash 转写成文字再交给 Agent（它拿到的和打字一样）。站点派发后立刻把转写交回页面，逐词比对当场画出来；Agent 的一句文字点评后到，不挡「继续」。"
+              + "听音题和例句的读音也来自平台：朗读 Agent 的每个回合由平台合成成语音（单元 1、2 预生成，单元 3 运行时合成）。老师这个 Agent 的 agent.yaml 仍只声明 voice.input，点评是文字。"
               + "限额也来自平台契约：每会话每分钟 10 次、单段 60 秒 / 2 MB。",
             evidence: "sessions.sendVoiceTurn → turns.get（转写先回）/ waitForTurn（点评）",
           },
@@ -434,9 +435,10 @@ agentOptions:
         openers: [],
         agentFile: "agenthub/agents/edu-english-coach/agent.yaml",
         snippet: `# CLAUDE.md 里的上法（节选）
-# 1. 【出题】分两批调 present_lesson（同一个 lesson_id，先 2 道、再 6 道），四种题型混排，正文留空
-# 2. 【结算】先回一句中文点评，再调 present_lesson 把下一关一批出齐——专门练这一关错过的点
-# 3. 【为什么】一两句中文讲这一题；跟读的转写回一两句文字点评；这两种都不调工具
+# 1. 【出题】学员每做完单元 1、2 的一关，后台照错题调一次 present_lesson 出单元 3 的一关
+#    （听音、拼句、填空、跟读各 2 道），这一轮不写字
+# 2. 【单元结算】一个单元做完，回一两句中文点评
+# 3. 【为什么】一两句中文讲这一题；跟读的转写回一两句文字点评；这三种都不调工具
 
 mcpServers:
   - vcrd_………                    # 教育 MCP：课件/展示（含 present_lesson）
@@ -448,9 +450,9 @@ voice:                          # 跟读：语音回合只做转写，点评是�
         id: "roleplay",
         name: "情景对话",
         persona: "一年级学生",
-        tagline: "跟咖啡店店员用英语聊三四句",
+        tagline: "Agent 实时语音对话：跟店员用英语聊三四句",
         intro:
-          "同一个科目换一种练法：这次不是做题，而是把刚学的句子用出去。手机里是一家咖啡店，店员 Sam 是一个 format: live 的 Agent：他不建沙箱、不烘焙镜像，会话只由「定义文档 + 模型服务」组成，所以开口快；代价是他调不了任何工具，小结卡是前端从你们的对话里自己算出来的。按住按钮说英语，平台先把你的话转写成文字交给他，他回的那句再被合成为语音播放出来（对讲机式的半双工：按住才录，松手就发）。三四轮之后看小结：说了几句、用到了哪些句型、点到了哪几个词。不打分，也不评发音（转写会顺手把读音纠成正确的词，评不准）。",
+          "这个视角展示 Agent 实时语音对话。手机里是一家咖啡店，店员 Sam 是一个 format: live 的 Agent：他不建沙箱、不烘焙镜像，会话只由「定义文档 + 模型服务」组成，所以开口快；代价是他调不了任何工具，小结卡是前端从你们的对话里自己算出来的。按住按钮说英语，平台先用 qwen3-asr-flash 把你的话转写成文字交给他，他回的那句再由 qwen3-tts-flash 合成为语音播放出来（对讲机式的半双工：按住才录，松手就发）。练法上不是做题，而是把刚学的句子用出去：三四轮之后看小结，说了几句、用到了哪些句型、点到了哪几个词。不打分，也不评发音（转写会顺手把读音纠成正确的词，评不准）。",
         agent: "roleplay",
         app: "roleplay",
         meta: [
@@ -462,14 +464,14 @@ voice:                          # 跟读：语音回合只做转写，点评是�
         // 没有列「独立沙箱运行时 / 托管 MCP / 生成式 UI」：live 运行时恒不具备这三样，
         // 列上去等于在时间线和能力面板上摆三条永远亮不起来的卡。这正是这个视角要展示的
         // 区别——首字快的代价就是这些都没有。
-        capabilities: ["file-agent", "live", "session-turn", "stream", "config-values", "model-gate", "voice-turn"],
+        capabilities: ["live", "voice-turn", "file-agent", "session-turn", "stream", "config-values", "model-gate"],
         capabilityOverrides: {
           "file-agent": { evidence: "agenthub/agents/edu-english-roleplay/agent.yaml + CLAUDE.md" },
           "voice-turn": {
             blurb:
-              "对话的每一轮都是一个语音回合：你的录音由平台先转写再交给 Agent，Agent 回的那句话被合成为分段音频播放出来。"
+              "对话的每一轮都是一个语音回合：你的录音由平台先用 qwen3-asr-flash 转写再交给 Agent，Agent 回的那句话由 qwen3-tts-flash 合成为分段音频播放出来。"
               + "限额也来自平台契约：每会话每分钟 10 次、单段 60 秒 / 2 MB。",
-            evidence: "agenthub/agents/edu-english-roleplay/agent.yaml + voice: input/output",
+            evidence: "agenthub/agents/edu-english-roleplay/agent.yaml",
           },
         },
         openers: ["我走进咖啡店，开始点单"],

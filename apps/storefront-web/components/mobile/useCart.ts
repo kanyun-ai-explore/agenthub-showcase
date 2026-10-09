@@ -1,13 +1,14 @@
 "use client";
 
 /**
- * 购物车，走 `/api/backend/cart/*` —— 和 shopping agent 的 MCP 打的是同一组路由，
- * 带同一个 `X-CMA-User`。这是「货架和 agent 共用一个后端」这句话的实处。
+ * 购物车，走 `/api/backend/cart/*` —— 和 shopping agent 的 MCP 打的是同一组路由、同一个访客身份。
+ * 这是「货架和 agent 共用一个后端」这句话的实处。身份在 httpOnly 的 `ahv` cookie 里，
+ * 请求不带 `X-CMA-User`；`visitorTag` 为 null 表示还没拿到 cookie，先不发。
  */
 
 import { useCallback, useEffect, useState } from "react";
 import type { Cart } from "@/lib/backend/types";
-import { visitorHeaders } from "@/lib/showcase/visitor";
+import { visitorPost } from "@/lib/showcase/visitor";
 
 export interface CartApi {
   cart: Cart | null;
@@ -20,27 +21,23 @@ export interface CartApi {
   reload: () => void;
 }
 
-export function useCart(visitorId: string | null): CartApi {
+export function useCart(visitorTag: string | null): CartApi {
   const [cart, setCart] = useState<Cart | null>(null);
   const [busy, setBusy] = useState(false);
   const [token, setToken] = useState(0);
 
   const call = useCallback(
     async (path: string, body: unknown): Promise<Cart | null> => {
-      const res = await fetch(path, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...visitorHeaders(visitorId) },
-        body: JSON.stringify(body),
-      });
+      const res = await visitorPost(path, body);
       if (!res.ok) return null;
       const data = (await res.json()) as { cart?: Cart };
       return data.cart ?? null;
     },
-    [visitorId],
+    [],
   );
 
   useEffect(() => {
-    if (!visitorId) return;
+    if (!visitorTag) return;
     let cancelled = false;
     void call("/api/backend/cart/get", {}).then((next) => {
       if (!cancelled && next) setCart(next);
@@ -48,7 +45,7 @@ export function useCart(visitorId: string | null): CartApi {
     return () => {
       cancelled = true;
     };
-  }, [call, visitorId, token]);
+  }, [call, visitorTag, token]);
 
   const mutate = useCallback(
     async (path: string, body: unknown) => {

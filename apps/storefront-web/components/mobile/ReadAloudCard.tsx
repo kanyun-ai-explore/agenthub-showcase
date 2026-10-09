@@ -8,9 +8,9 @@
  *
  * 几件事值得说明白：
  * - **没有发音分**：比对只看转写出来的词对不对，页面上如实写「转写会顺手
- *   纠错，结果偏乐观」。孩子看到的绿/红/灰是「这句话读出来了没有」，不是评分。
+ *   纠错，结果偏乐观」。学员看到的绿/红/灰是「这句话读出来了没有」，不是评分。
  * - **限额在本地先拦**：每分钟 10 次、单段 60 s / 2 MB（平台契约）。超了就在这里给中文
- *   提示、不发请求——平台的 429 是兜底，不该是孩子第一次听到的答案。录制到 55 s 自动
+ *   提示、不发请求——平台的 429 是兜底，不该是学员第一次听到的答案。录制到 55 s 自动
  *   收尾：平台是在**上传之后**才拒 60 s 的段，多录那几秒只是白传一次。
  * - **这张卡不发请求、不判对错**：录好的一段交给 `onTake`，由页面排进回合队列（会话同一
  *   时刻只能跑一个回合）；转写和比对结果从 `result` 传回来画。agent 的文字点评不在卡上，
@@ -48,12 +48,12 @@ export type ReadAloudStatus = "idle" | "queued" | "sending" | "done";
 
 const fmtSeconds = (ms: number) => `${Math.round(ms / 1000)}s`;
 
-/** 没声音时给孩子的那句。 */
+/** 没声音时给学员的那句。 */
 export const SILENT_TAKE_NOTICE = "没听到声音，按住再读一次";
 
 /**
  * 解码这段录音、量一下有声音的部分有多长。解码不了（没有 OfflineAudioContext、容器读不出来）
- * 返回 `unknown`：调用方照常发，不替孩子拦。
+ * 返回 `unknown`：调用方照常发，不替学员拦。
  */
 async function measureTake(blob: Blob): Promise<{ gate: "silent" | "voiced" | "unknown"; voicedMs?: number }> {
   try {
@@ -94,13 +94,13 @@ export function ReadAloudCard({
   status: ReadAloudStatus;
   /** 转写回来之后的比对结果；还没有就是 null。 */
   result: { transcript: string; comparison: ReadingComparison } | null;
-  /** 这次没发出去（平台拒了 / 网断了）：可以直接给孩子看的中文。 */
+  /** 这次没发出去（平台拒了 / 网断了）：可以直接给学员看的中文。 */
   error: string | null;
   /** 会话能不能发语音回合（没接上 agent 时只能跳过）。 */
   canRecord: boolean;
   onTake: (take: VoiceTake) => void;
   onSkip: () => void;
-  /** 范例音走站点 TTS（与听音题同一条路）。 */
+  /** 范例音和听音题同一条路：平台合成的读音（单元 1、2 预生成，单元 3 运行时），取不到退本机语音。 */
   onPlayExample: () => void;
   playingExample: boolean;
 }) {
@@ -116,7 +116,7 @@ export function ReadAloudCard({
   const tickTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   /** 这张卡已经交出去的语音回合时刻（本地闸；平台的 429 是兜底）。 */
   const turnTimesRef = useRef<number[]>([]);
-  /** 手指还按着吗。`getUserMedia` 可能弹权限框，等待期间孩子松手是常事。 */
+  /** 手指还按着吗。`getUserMedia` 可能弹权限框，等待期间学员松手是常事。 */
   const pressedRef = useRef(false);
   /**
    * 已经有一次 `startRecording` 在跑（等权限 / 等轨道）。`phase` 要到 `recorder.start()`
@@ -218,7 +218,7 @@ export function ReadAloudCard({
       release();
       return;
     }
-    // 等权限框的这几秒里孩子可能已经松手了：这时**不开始录**。真录下去的话，一段
+    // 等权限框的这几秒里学员可能已经松手了：这时**不开始录**。真录下去的话，一段
     // 没人说话的空白音频会占掉每分钟 10 次里的一次，还换来一句「没听清」。
     if (!pressedRef.current) {
       stream.getTracks().forEach((track) => track.stop());
@@ -341,7 +341,9 @@ export function ReadAloudCard({
       {notice ? <div className="en-read-notice">{notice}</div> : null}
       {shownError ? <div className="en-read-error">{shownError}</div> : null}
 
-      {!result && !busy && !recording ? (
+      {/* 排队中、发送中也能跳过：出题回合在飞、会话还在起的时候，
+          学员不必干等。 */}
+      {!result && !recording ? (
         <button type="button" className="en-skip" onClick={onSkip}>
           现在说不了，跳过这道
         </button>

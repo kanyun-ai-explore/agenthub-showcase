@@ -1,5 +1,6 @@
 import { isTerminalTurnStatus, PilotPlatformApiError } from "@kanyun-ai-infra/agenthub";
 import { getAgentHubClient, isAgentHubConfigured } from "@/lib/agenthub/client";
+import { ownsSession, sessionNotFound } from "@/lib/agenthub/session-binding";
 import { errorResponse, httpStatusOf } from "@/lib/backend/errors";
 import { crossSiteRequest } from "@/lib/backend/guards";
 
@@ -82,7 +83,7 @@ export async function POST(req: Request) {
   if (!isAgentHubConfigured()) {
     return Response.json({ error: "not_configured" }, { status: 501 });
   }
-  // 花的是平台的钱（回合 + 转写），跨站挡板和 /api/tts 同一条（见 lib/backend/guards.ts）。
+  // 花的是平台的钱（回合 + 转写），跨站挡板和 /api/course/audio 同一条（见 lib/backend/guards.ts）。
   if (crossSiteRequest(req)) return fail(403, "cross_origin_not_allowed");
 
   let form: FormData;
@@ -94,6 +95,8 @@ export async function POST(req: Request) {
 
   const sessionId = String(form.get("sessionId") ?? "").trim();
   if (!sessionId) return fail(400, "bad_request", "缺少 sessionId。");
+  // 归属：不是这个浏览器建的会话一律 404，在调平台之前（lib/agenthub/session-binding.ts）。
+  if (!ownsSession(req, sessionId)) return sessionNotFound();
 
   const audio = form.get("audio");
   if (!(audio instanceof File)) return fail(400, "bad_request", "缺少录音（audio 字段）。");

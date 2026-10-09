@@ -1,4 +1,5 @@
 import { getAgentHubClient, isAgentHubConfigured } from "@/lib/agenthub/client";
+import { ownsSession, sessionNotFound } from "@/lib/agenthub/session-binding";
 import { errorResponse } from "@/lib/backend/errors";
 import { portalSessionHref } from "@/lib/showcase/links";
 
@@ -10,12 +11,14 @@ import { portalSessionHref } from "@/lib/showcase/links";
  * 序列化成 `{}` 且 HTTP 200——轮询看着健康，页面永远等不到状态，输入框一直禁用。
  * 当时的接口测试只验了「调用成功」，没验「字段存在」，所以没抓到。
  */
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!isAgentHubConfigured()) {
     return Response.json({ error: "not_configured" }, { status: 501 });
   }
   try {
     const { id } = await params;
+    // 归属：不是这个浏览器建的会话一律 404，在调平台之前（lib/agenthub/session-binding.ts）。
+    if (!ownsSession(req, id)) return sessionNotFound();
     const { client } = getAgentHubClient();
     const result = await client.sessions.get(id);
     const status = result.session?.status ?? null;

@@ -1,0 +1,286 @@
+{
+  "note": "单元 1、2 的读音：由 scripts/course-audio/generate.mjs 经平台的朗读 agent 预生成（回合正文和原文逐字相等才收），文件在 public/course-audio/。改了 u1.json / u2.json 里要念的句子，就重跑这个脚本。",
+  "generatedAt": "2026-10-08T21:40:29+08:00",
+  "clips": [
+    {
+      "text": "a trip abroad",
+      "file": "8bfd8ad502e5f803.m4a",
+      "ms": 1360,
+      "bytes": 13588,
+      "segments": 1
+    },
+    {
+      "text": "I'm going to plan our holiday.",
+      "file": "f423c5bf44f700b3.m4a",
+      "ms": 2320,
+      "bytes": 19414,
+      "segments": 1
+    },
+    {
+      "text": "I'll take the train.",
+      "file": "f2eaf7703f715298.m4a",
+      "ms": 1520,
+      "bytes": 14098,
+      "segments": 1
+    },
+    {
+      "text": "Where are you going to stay?",
+      "file": "10b049ef3a762fd6.m4a",
+      "ms": 1680,
+      "bytes": 15774,
+      "segments": 1
+    },
+    {
+      "text": "the departure gate",
+      "file": "87c164a2081a218a.m4a",
+      "ms": 1120,
+      "bytes": 11726,
+      "segments": 1
+    },
+    {
+      "text": "There's a delay, so we must wait.",
+      "file": "512d333f02dc8bea.m4a",
+      "ms": 2480,
+      "bytes": 21128,
+      "segments": 1
+    },
+    {
+      "text": "We don't have to wait.",
+      "file": "bec636865d3d7224.m4a",
+      "ms": 1120,
+      "bytes": 12326,
+      "segments": 1
+    },
+    {
+      "text": "Can I have a window seat?",
+      "file": "b307758036532462.m4a",
+      "ms": 1600,
+      "bytes": 14991,
+      "segments": 1
+    },
+    {
+      "text": "We visited a museum.",
+      "file": "acf9ef659c3f7ade.m4a",
+      "ms": 1520,
+      "bytes": 14899,
+      "segments": 1
+    },
+    {
+      "text": "We arrived at the beach at noon.",
+      "file": "bd8970ba59f7b69c.m4a",
+      "ms": 2560,
+      "bytes": 20718,
+      "segments": 1
+    },
+    {
+      "text": "She bought a souvenir.",
+      "file": "9d58b58a5190d74a.m4a",
+      "ms": 1600,
+      "bytes": 14895,
+      "segments": 1
+    },
+    {
+      "text": "The guide showed us the old town.",
+      "file": "c6dcb358ffbd0619.m4a",
+      "ms": 2160,
+      "bytes": 18544,
+      "segments": 1
+    },
+    {
+      "text": "Have you ever been to Japan?",
+      "file": "bdf8146a81d0b0ec.m4a",
+      "ms": 1760,
+      "bytes": 16088,
+      "segments": 1
+    },
+    {
+      "text": "I have never been to Paris.",
+      "file": "5e2690289880f600.m4a",
+      "ms": 2080,
+      "bytes": 17776,
+      "segments": 1
+    },
+    {
+      "text": "I've already seen it.",
+      "file": "854fa0b88bdd4817.m4a",
+      "ms": 1360,
+      "bytes": 13543,
+      "segments": 1
+    },
+    {
+      "text": "We have learned a lot about their culture.",
+      "file": "88b604ba8c4097bb.m4a",
+      "ms": 2000,
+      "bytes": 17866,
+      "segments": 1
+    },
+    {
+      "text": "I have a reservation.",
+      "file": "51769290a6bb8e6c.m4a",
+      "ms": 1520,
+      "bytes": 14392,
+      "segments": 1
+    },
+    {
+      "text": "Could you bring me another towel?",
+      "file": "a2f2c450b5396199.m4a",
+      "ms": 1840,
+      "bytes": 16673,
+      "segments": 1
+    },
+    {
+      "text": "You must leave your key here.",
+      "file": "4c183b58b42987b4.m4a",
+      "ms": 1840,
+      "bytes": 16550,
+      "segments": 1
+    },
+    {
+      "text": "I'm going to call reception now.",
+      "file": "f4ac450a10c62d8d.m4a",
+      "ms": 2080,
+      "bytes": 18444,
+      "segments": 1
+    },
+    {
+      "text": "a bigger size",
+      "file": "59f2655ac65eed74.m4a",
+      "ms": 1440,
+      "bytes": 13858,
+      "segments": 1
+    },
+    {
+      "text": "Can I try on this shirt?",
+      "file": "c32903d3d3eb6348.m4a",
+      "ms": 1440,
+      "bytes": 13880,
+      "segments": 1
+    },
+    {
+      "text": "the best price in town",
+      "file": "41aa0af5242c555d.m4a",
+      "ms": 1600,
+      "bytes": 15386,
+      "segments": 1
+    },
+    {
+      "text": "Shoes are cheaper during the sale.",
+      "file": "385566fa2ef69d1d.m4a",
+      "ms": 1760,
+      "bytes": 16319,
+      "segments": 1
+    },
+    {
+      "text": "I have a sore throat.",
+      "file": "3750fea9c41fff43.m4a",
+      "ms": 1680,
+      "bytes": 15292,
+      "segments": 1
+    },
+    {
+      "text": "I think I have a fever.",
+      "file": "1eb8c88b4da715b3.m4a",
+      "ms": 1840,
+      "bytes": 15855,
+      "segments": 1
+    },
+    {
+      "text": "Take this medicine twice a day.",
+      "file": "ef3d6489f1efa032.m4a",
+      "ms": 1920,
+      "bytes": 17170,
+      "segments": 1
+    },
+    {
+      "text": "I'd like to make an appointment.",
+      "file": "fbeb35dc0c0595d0.m4a",
+      "ms": 1840,
+      "bytes": 16877,
+      "segments": 1
+    },
+    {
+      "text": "We're meeting a client at ten.",
+      "file": "d0eaf015f8f979e2.m4a",
+      "ms": 1920,
+      "bytes": 17171,
+      "segments": 1
+    },
+    {
+      "text": "My colleague is sending the report.",
+      "file": "bdfda767c5708c74.m4a",
+      "ms": 2400,
+      "bytes": 20065,
+      "segments": 1
+    },
+    {
+      "text": "I'll send you an email.",
+      "file": "bdc6bad6d88c79f7.m4a",
+      "ms": 1280,
+      "bytes": 12720,
+      "segments": 1
+    },
+    {
+      "text": "What time are you leaving tomorrow?",
+      "file": "42c30f4de9930244.m4a",
+      "ms": 2080,
+      "bytes": 18087,
+      "segments": 1
+    },
+    {
+      "text": "for three years",
+      "file": "13a1fda513b6bd92.m4a",
+      "ms": 1280,
+      "bytes": 12708,
+      "segments": 1
+    },
+    {
+      "text": "I have applied for the job.",
+      "file": "c3761b5143797dac.m4a",
+      "ms": 1600,
+      "bytes": 14669,
+      "segments": 1
+    },
+    {
+      "text": "She's worked here since May.",
+      "file": "6f8a3b557fbb7a4b.m4a",
+      "ms": 1680,
+      "bytes": 15633,
+      "segments": 1
+    },
+    {
+      "text": "How long have you been in this job?",
+      "file": "434cf199cfce4a12.m4a",
+      "ms": 2000,
+      "bytes": 17744,
+      "segments": 1
+    },
+    {
+      "text": "I'm going to the gym.",
+      "file": "65edad20beee2538.m4a",
+      "ms": 2320,
+      "bytes": 19540,
+      "segments": 1
+    },
+    {
+      "text": "I have played tennis for two years.",
+      "file": "e036a4c8ce361285.m4a",
+      "ms": 2640,
+      "bytes": 21391,
+      "segments": 1
+    },
+    {
+      "text": "a healthier diet",
+      "file": "e85a3d99f2deacce.m4a",
+      "ms": 1280,
+      "bytes": 12721,
+      "segments": 1
+    },
+    {
+      "text": "You should get more sleep.",
+      "file": "d31640260b72a706.m4a",
+      "ms": 1200,
+      "bytes": 12424,
+      "segments": 1
+    }
+  ]
+}

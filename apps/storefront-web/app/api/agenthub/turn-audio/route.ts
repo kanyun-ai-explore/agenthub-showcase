@@ -1,5 +1,6 @@
 import { PilotPlatformApiError } from "@kanyun-ai-infra/agenthub";
 import { getAgentHubClient, isAgentHubConfigured } from "@/lib/agenthub/client";
+import { ownsSession, sessionNotFound } from "@/lib/agenthub/session-binding";
 import { errorResponse, httpStatusOf } from "@/lib/backend/errors";
 import { crossSiteRequest } from "@/lib/backend/guards";
 
@@ -40,6 +41,8 @@ export async function GET(req: Request) {
   if (!sessionId || !turnId) {
     return fail(400, "bad_request", "sessionId 和 turnId 都是必填的。");
   }
+  // 归属：不是这个浏览器建的会话一律 404，在调平台之前（lib/agenthub/session-binding.ts）。
+  if (!ownsSession(req, sessionId)) return sessionNotFound();
   const wait = url.searchParams.get("wait") !== "0";
 
   const { client } = getAgentHubClient();

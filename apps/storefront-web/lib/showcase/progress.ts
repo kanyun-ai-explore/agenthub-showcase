@@ -13,8 +13,12 @@
  * 只是记不住——记不住比整页报错好。这里没有读改写竞争要防：一份进度只属于一个浏览器。
  *
  * **键和旧字段不变**（一期、二期写下的存档照常读）：路径图改版只**加**了 `completed`
- * 和 `bestCombo` 两个字段。旧存档没有 `completed`，按它的 `lessons`（上完几节）把路径上
- * 前几关记成已通关——老访客回来不会被打回第一关。
+ * 和 `bestCombo` 两个字段。XP、连胜、课节数照旧累计。
+ *
+ * 课程 v2 换了整套内容，关卡 id 改成 `b1-` 前缀（`lib/course/english-path.ts`）：
+ * 旧路径的通关记录（`u1-l1` 这类）留在 `completed` 里但对不上任何新关卡，老访客从新课程的
+ * 第一关开始。原先「旧存档没有 `completed` 就按 `lessons` 把前几关记成通关」的折算一并去掉——
+ * 做过几节一年级启蒙，不等于做过 B1 的前几关。
  */
 
 export interface CourseProgress {
@@ -27,7 +31,7 @@ export interface CourseProgress {
   lastDay: string;
   /** 上完的课节数。 */
   lessons: number;
-  /** 路径图上通关过的关卡 id（`lib/course/english-path.ts`），按第一次通关的先后。 */
+  /** 路径图上通关过的关卡 id（`lib/course/english-path.ts`），按第一次通关的先后。旧路径的 id 也留着。 */
   completed: string[];
   /** 历史最长连对（一关之内连续答对的题数）。 */
   bestCombo: number;
@@ -39,15 +43,6 @@ export const XP_PER_LESSON = 15;
 export const PROGRESS_KEY_PREFIX = "agenthub-showcase-english-progress";
 
 const EMPTY: CourseProgress = { xp: 0, streak: 0, lastDay: "", lessons: 0, completed: [], bestCombo: 0 };
-
-/**
- * 路径上的关卡 id 按顺序排好。从 `english-path.ts` 注入而不是直接 import：这个文件要
- * 能被检查脚本单独加载，路径图那边改了顺序也只改那一处。
- */
-let pathOrder: readonly string[] = [];
-export function setPathOrder(ids: readonly string[]): void {
-  pathOrder = ids;
-}
 
 function keyFor(visitorId: string): string {
   return `${PROGRESS_KEY_PREFIX}:${visitorId}`;
@@ -74,10 +69,10 @@ function coerce(raw: unknown): CourseProgress {
   const value = raw as Partial<Record<keyof CourseProgress, unknown>>;
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0);
   const lessons = num(value.lessons);
+  // 旧存档（路径图之前写的）没有 completed：从第一关开始（见文件头）。
   const completed = Array.isArray(value.completed)
     ? value.completed.filter((id): id is string => typeof id === "string")
-    : // 旧存档（路径图之前写的）：上过几节，就把路径上前几关算作通关。
-      pathOrder.slice(0, Math.min(lessons, pathOrder.length));
+    : [];
   return {
     xp: num(value.xp),
     streak: num(value.streak),

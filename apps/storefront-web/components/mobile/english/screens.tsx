@@ -3,8 +3,9 @@
 /**
  * 英语小课的三块非答题界面：路径图、等题、结算。
  *
- * 等待都给看得见的反馈：路径图底部一行写着 agent 这会儿在干什么（会话启动中 / 在出第几关 /
- * 已备好）；等题界面按事件流的阶段换提示；结算屏的数字本地立刻出来，点评随后流入。
+ * 等待都给看得见的反馈：路径图底部一行写着 agent 这会儿在干什么（会话启动中 / 在按错题出单元 3 /
+ * 已备好）；等题界面（只有单元 3 会等）按事件流的阶段换提示；结算屏的数字本地立刻出来，单元点评
+ * 随后流入，单元 3 那一关的出题进度也写在结算屏上。
  */
 
 import { formatDuration } from "@/lib/course/english-lesson";
@@ -20,7 +21,7 @@ import type { LessonStatus, LiveTurn, Reply } from "./useLessonChannel";
 // ---------------------------------------------------------------------------
 
 /** 节点左右摆动的位置（蛇形路径），按关卡在单元里的序号取。 */
-const OFFSETS = [0, 52, 0, -52];
+const OFFSETS = [0, 48, 0, -48, 0];
 
 export function PathMap({
   progress,
@@ -68,13 +69,14 @@ export function PathMap({
                 const isCurrent = stop.index === current.index && !done;
                 const status = lessonStatus(level.id);
                 const state = done ? "done" : isCurrent ? "current" : unlocked ? "open" : "locked";
-                const offset = OFFSETS[levelIndex % 4];
-                const trophy = levelIndex === 3;
+                const offset = OFFSETS[levelIndex % OFFSETS.length];
+                // 每个单元的最后一关是单元结算（单元点评），画成奖杯。
+                const trophy = levelIndex === unit.levels.length - 1;
                 return (
                   <div className="en-node-row" key={level.id} style={{ transform: `translateX(${offset}px)` }}>
                     {isCurrent ? (
                       <div className="en-node-tip">
-                        {status === "ready" ? "开始" : status === "running" ? "老师在出题…" : "开始"}
+                        {status === "running" || status === "queued" ? "正在按你的错题生成…" : "开始"}
                       </div>
                     ) : null}
                     <div className="en-node-ring" data-current={isCurrent}>
@@ -120,6 +122,7 @@ export function LessonLoading({
   status,
   live,
   waitedSeconds,
+  hasMistakes,
   problem,
   onBack,
   onRetry,
@@ -128,6 +131,8 @@ export function LessonLoading({
   status: LessonStatus;
   live: LiveTurn | null;
   waitedSeconds: number;
+  /** 有没有错题：没有就照单元 1、2 的语法点出综合练习，提示语跟着换。 */
+  hasMistakes: boolean;
   /** 出不了题（agent 没接上 / 这一关没出成）：一句话，加「再试一次」。 */
   problem: string | null;
   onBack: () => void;
@@ -170,7 +175,9 @@ export function LessonLoading({
             <i />
             <i />
           </div>
-          <p className="en-loading-sub">Emma 老师现场给你出这一关的题 · 已等 {waitedSeconds}s</p>
+          <p className="en-loading-sub">
+            {hasMistakes ? "正在根据你的错题生成" : "你还没有错题，按单元 1、2 的语法点出综合练习"} · 已等 {waitedSeconds}s
+          </p>
         </>
       )}
     </div>
@@ -181,6 +188,15 @@ export function LessonLoading({
 // 结算
 // ---------------------------------------------------------------------------
 
+/** 结算屏上单元 3 那一关的出题进度（单元 1、2 每做完一关就出或重出一关）。 */
+export interface GenerationNote {
+  /** 单元 3 那一关的标题。 */
+  title: string;
+  state: "working" | "ready" | "failed";
+  /** 是照错题出的，还是没有错题、出的综合练习。 */
+  withMistakes: boolean;
+}
+
 export function ResultScreen({
   xp,
   accuracy,
@@ -189,8 +205,8 @@ export function ResultScreen({
   bestCombo,
   review,
   live,
-  canAskAgent,
-  nextNote,
+  showReview,
+  generation,
   onContinue,
 }: {
   xp: number;
@@ -199,11 +215,11 @@ export function ResultScreen({
   streak: number;
   bestCombo: number;
   review: Reply | undefined;
-  /** 结算点评正在写：逐字流入。 */
+  /** 单元点评正在写：逐字流入。 */
   live: LiveTurn | null;
-  canAskAgent: boolean;
-  /** 下一关出好了的那句提示（照这一关的错题出的会这么写）；还没出好是 null。 */
-  nextNote: string | null;
+  /** 单元的最后一关才有单元点评，其余各关的结算屏只有本地数字。 */
+  showReview: boolean;
+  generation: GenerationNote | null;
   onContinue: () => void;
 }) {
   return (
@@ -244,9 +260,9 @@ export function ResultScreen({
           ) : null}
         </div>
 
-        {canAskAgent ? (
+        {showReview ? (
           <div className="en-review">
-            <span className="en-judge-agent-who">Emma 老师的点评</span>
+            <span className="en-judge-agent-who">Emma 老师的单元点评</span>
             {review?.status === "done" && review.text ? (
               review.text
             ) : review?.status === "failed" ? (
@@ -258,13 +274,22 @@ export function ResultScreen({
               </>
             ) : (
               <span className="en-dots">
-                {review?.status === "running" ? "老师在看你这一关的表现" : "排队中，老师在忙上一件事"}
+                {review?.status === "running" ? "老师在看你这个单元的表现" : "排队中，老师在忙上一件事"}
                 <i />
                 <i />
                 <i />
               </span>
             )}
-            {nextNote ? <div className="en-review-next">{nextNote}</div> : null}
+          </div>
+        ) : null}
+
+        {generation ? (
+          <div className="en-review en-review-next" data-state={generation.state}>
+            {generation.state === "working"
+              ? `单元 3「${generation.title}」正在后台${generation.withMistakes ? "按你的错题" : "按单元 1、2 的语法点"}出题`
+              : generation.state === "ready"
+                ? `单元 3「${generation.title}」已经${generation.withMistakes ? "按你的错题" : "按单元 1、2 的语法点"}出好`
+                : `单元 3「${generation.title}」这次没出成，打开它时会再出一次`}
           </div>
         ) : null}
 

@@ -1,4 +1,5 @@
 import { getAgentHubClient, isAgentHubConfigured } from "@/lib/agenthub/client";
+import { ownsSession, sessionNotFound } from "@/lib/agenthub/session-binding";
 
 /**
  * 一条会话渲染流的 SSE 代理。浏览器不能自己调 `streamEvents`（要 token，token 留在
@@ -22,6 +23,8 @@ export async function GET(req: Request) {
   if (!sessionId) {
     return Response.json({ error: "bad_request", detail: "sessionId is required" }, { status: 400 });
   }
+  // 归属：不是这个浏览器建的会话一律 404，在调平台之前（lib/agenthub/session-binding.ts）。
+  if (!ownsSession(req, sessionId)) return sessionNotFound();
 
   // 自动重连时浏览器带 Last-Event-ID；query 参数是首次连接（刷新后页面自己知道游标）。
   const headerCursor = req.headers.get("last-event-id");

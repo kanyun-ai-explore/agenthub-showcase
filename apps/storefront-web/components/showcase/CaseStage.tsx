@@ -18,7 +18,7 @@ import { CAPABILITIES, type CapabilityId, type CapabilitySignal } from "@/lib/sh
 import { PLATFORM_EXTENSIONS, type Scenario, type Surface } from "@/lib/showcase/cases";
 import { readPrewarmHandle, writePrewarmHandle } from "@/lib/agenthub/prewarm-handle";
 import { DOC_LINKS, GETTING_STARTED, repoFileHref } from "@/lib/showcase/links";
-import { readVisitorId, rememberVisitorId, resetVisitorId } from "@/lib/showcase/visitor";
+import { readLocalProgressKey, resetVisitor, useVisitorTag } from "@/lib/showcase/visitor";
 import { ShoppingApp } from "@/components/mobile/ShoppingApp";
 import { MerchantApp } from "@/components/mobile/MerchantApp";
 import { WeChatApp } from "@/components/mobile/WeChatApp";
@@ -127,16 +127,16 @@ export function CaseStage({
   const [events, setEvents] = useState<LiveEvent[]>([]);
   const [tools, setTools] = useState<string[]>([]);
   const [settleToken, setSettleToken] = useState(0);
-  // 访客身份分两层：浏览器本地的 id 只是冷启回退；会话真正用的身份是平台给的
-  // （命中预热池时是暖机时铸好的 EUID），从 conversation.userId 读回。手机里那些后端
-  // 请求的 X-CMA-User 必须跟会话用的是同一个值，「换个身份」才不会只换一半——所以
-  // 换身份 = 换会话（整页重载）。
-  const [localVisitorId, setLocalVisitorId] = useState<string | null>(null);
-  useEffect(() => setLocalVisitorId(readVisitorId()), []);
+  // 访客身份由服务端签发，放在 httpOnly cookie 里：页面拿不到身份本身，只拿到代号（HMAC）。
+  // 挂载时先拿 cookie，购物车、记忆、建会话、预热都排在它后面。代号只有一份（lib/showcase/visitor.ts）：
+  // 购物会话采纳平台 EUID、cookie 失效后重拿，都在那里换。换身份 = 服务端签新身份 + 整页重载。
+  // localProgressKey 只是英语小课、情景对话本机进度的 localStorage key，不是身份，不发给服务端。
+  const visitorTag = useVisitorTag();
+  const [localProgressKey, setLocalProgressKey] = useState<string | null>(null);
+  useEffect(() => setLocalProgressKey(readLocalProgressKey()), []);
 
   const conversation = useAgentConversation({
     agent: surface.agent ?? "shopping",
-    endUserId: localVisitorId,
     onSignal: (signal, detail) => {
       if (signal === "tool-call" && detail) {
         setTools((prev) => (prev.includes(detail) ? prev : [...prev, detail]));
@@ -152,37 +152,48 @@ export function CaseStage({
     readyPollMs: surface.app === "english" ? 300 : undefined,
   });
 
-  const visitorId = conversation.userId ?? localVisitorId;
-  // 会话拿到平台身份后记成本地 id：服务端已把会话前的购物车/记忆搬到它名下，下次来访
-  // 再从它搬到下一个会话——身份一段段接着走，而不是每次来访从零开始。
-  useEffect(() => {
-    if (conversation.userId) rememberVisitorId(conversation.userId);
-  }, [conversation.userId]);
+  // 英语小课的第二个会话：只跑单元 3 的后台出题，讲解、跟读、单元点评留在主会话，两边互不排队。
+  // 别的视角不传它；不调 start() 就不会建会话。
+  // 只把工具调用转给右栏（能力卡要亮），会话建好、预热这类信号不转，免得右栏的会话号换成它的。
+  const background = useAgentConversation({
+    agent: surface.agent ?? "shopping",
+    usePrewarmHandle: false,
+    onSignal: (signal, detail) => {
+      if (signal === "tool-call" && detail) setTools((prev) => (prev.includes(detail) ? prev : [...prev, detail]));
+    },
+  });
+
   // 跨 agent 预热：本会话就绪后，为同一访客预建 surface.prewarm 里那些 agent 的会话，
   // 学生切课到那边直接复用、不再冷启。句柄存浏览器（站点多副本，服务端 .data 是 pod
-  // 本地）；ref 保证每个 (visitorId, sibling) 只发一次预建请求。
+  // 本地）；ref 保证每个 (visitorTag, sibling) 只发一次预建请求。预建会话的身份由服务端取自 cookie。
   const prewarmedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (conversation.phase !== "ready" || !visitorId || !surface.prewarm?.length) return;
+    if (conversation.phase !== "ready" || !visitorTag || !surface.prewarm?.length) return;
     for (const sibling of surface.prewarm) {
-      const dedupeKey = `${visitorId}:${sibling}`;
+      const dedupeKey = `${visitorTag}:${sibling}`;
       if (prewarmedRef.current.has(dedupeKey)) continue;
       prewarmedRef.current.add(dedupeKey);
-      if (readPrewarmHandle(sibling, visitorId)) continue;
+      if (readPrewarmHandle(sibling, visitorTag)) continue;
       void (async () => {
         try {
           const res = await fetch("/api/agenthub/session/prewarm", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ agent: sibling, endUserId: visitorId }),
+            body: JSON.stringify({ agent: sibling }),
           });
-          const data = (await res.json()) as { agentHubSessionId?: string; status?: string; detail?: string };
+          const data = (await res.json()) as {
+            agentHubSessionId?: string;
+            status?: string;
+            visitorTag?: string;
+            detail?: string;
+            error?: string;
+          };
           if (!res.ok || !data.agentHubSessionId) {
-            throw new Error(data.detail ?? `预热失败（HTTP ${res.status}）`);
+            throw new Error(data.detail ?? data.error ?? `预热失败（HTTP ${res.status}）`);
           }
           writePrewarmHandle({
             sessionId: data.agentHubSessionId,
-            userId: visitorId,
+            visitorTag: data.visitorTag ?? visitorTag,
             agent: sibling,
             createdAt: Date.now(),
           });
@@ -191,7 +202,7 @@ export function CaseStage({
             { signal: "prewarm-started", detail: `${sibling} → ${data.agentHubSessionId}`, at: Date.now() },
           ]);
         } catch (err) {
-          console.warn(`[case-stage] prewarm ${sibling} for ${visitorId} failed`, err);
+          console.warn(`[case-stage] prewarm ${sibling} failed`, err);
           setEvents((prev) => [
             ...prev,
             {
@@ -203,7 +214,7 @@ export function CaseStage({
         }
       })();
     }
-  }, [conversation.phase, visitorId, surface.prewarm]);
+  }, [conversation.phase, visitorTag, surface.prewarm]);
   const seen = useMemo(() => new Map(events.map((e) => [e.signal, e])), [events]);
   // 时间线按视角裁剪：语音回合那条只出现在声明了它的视角上（见 STEPS 上的注释）。
   const steps = useMemo(
@@ -231,18 +242,19 @@ export function CaseStage({
           ) : surface.app === "classroom" ? (
             <ClassroomApp conversation={conversation} openers={surface.openers} lessonTitle={surface.lessonTitle ?? lesson?.title ?? "数学课"} teacherName={surface.teacherName} welcomeText={surface.welcomeText} />
           ) : surface.app === "english" ? (
-            <EnglishCourseApp conversation={conversation} openers={surface.openers} visitorId={visitorId} lessonTitle={surface.lessonTitle} teacherName={surface.teacherName} welcomeText={surface.welcomeText} />
+            <EnglishCourseApp conversation={conversation} background={background} openers={surface.openers} visitorId={localProgressKey} lessonTitle={surface.lessonTitle} teacherName={surface.teacherName} welcomeText={surface.welcomeText} />
           ) : surface.app === "roleplay" ? (
-            <RoleplayApp conversation={conversation} openers={surface.openers} visitorId={visitorId} sceneTitle={surface.lessonTitle} clerkName={surface.teacherName} welcomeText={surface.welcomeText} />
+            <RoleplayApp conversation={conversation} openers={surface.openers} visitorId={localProgressKey} sceneTitle={surface.lessonTitle} clerkName={surface.teacherName} welcomeText={surface.welcomeText} />
           ) : (
             <ShoppingApp
               conversation={conversation}
               openers={surface.openers}
               settleToken={settleToken}
-              visitorId={visitorId}
-              onForget={() => {
-                resetVisitorId();
-                window.location.reload();
+              visitorTag={visitorTag}
+              onForget={async () => {
+                const tag = await resetVisitor();
+                if (tag) window.location.reload();
+                return tag !== null;
               }}
               initialProducts={catalog?.products ?? []}
               categories={catalog?.categories ?? []}

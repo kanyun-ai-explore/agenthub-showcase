@@ -1,6 +1,6 @@
 /**
  * 关卡播放器的状态机：一屏一题、检查、继续、错题在关末重出、连对横幅、结算数字。
- * 纯函数，不碰 React，也不碰 agent——这一层里的每一步都在本地完成，所以孩子点
+ * 纯函数，不碰 React，也不碰 agent——这一层里的每一步都在本地完成，所以学员点
  * 「检查」「继续」都是零等待。
  *
  * 规则：
@@ -156,7 +156,7 @@ export function truncate<A>(state: PlayerState<A>, total: number, now: number): 
 }
 
 /**
- * 跳过当前这道（只给跟读题用：没有麦克风、或者孩子这会儿说不了）。不计分、不重出、
+ * 跳过当前这道（只给跟读题用：没有麦克风、或者学员这会儿说不了）。不计分、不重出、
  * 不打断连对，直接进下一题。
  */
 export function skip<A>(state: PlayerState<A>, now: number): PlayerState<A> {
