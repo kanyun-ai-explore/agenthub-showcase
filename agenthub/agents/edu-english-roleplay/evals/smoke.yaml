@@ -1,0 +1,59 @@
+apiVersion: agenthub/v1alpha1
+kind: EvalSuite
+purpose: regression
+
+# 冒烟：Sam 店员的对话契约。他的每句话都会被语音合成念出来，所以是纯文本纪律：
+# 用英语、短句（一到两句、不超过 15 词）、无任何 markdown 记号、第 1 句永远由他
+# 先打招呼并问要点什么、收尾句重复所点内容并报价（数字 + dollars）。
+#
+# 这个 agent 刚上线不久，行为未经真实流量校准：gate 只保留回合完成，「不调工具」
+# 与回复形态断言全部放 soft 观察位（soft 违例在 run 详情页可见，不制造红灯墙）；
+# 连续 3 次 run 无 soft 违例后再升 gate。
+
+cases:
+  - id: opening-greeting
+    description: >-
+      页面替孩子按「开始」（发来的是中文）：照常先用英语问候、问要点什么——
+      不因为「他说了中文」就先教一句。
+    turns:
+      - user: "开始"
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: transcript
+        label: no-tools
+        severity: soft
+        expect:
+          usedNoTools: true
+      - type: reply
+        label: english-greeting
+        severity: soft
+        expect:
+          matches: "Welcome|Hi|Hello|What can I get|can I get|may I"
+
+  - id: order-with-closing-price
+    description: >-
+      两轮点单走到收尾：第 2 句跟进问一次，点单信息齐了后收尾句重复所点的东西
+      并报价（数字 + dollars）。
+    turns:
+      - user: "I want a coffee, please."
+      - user: "Hot. And a cake, please."
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: transcript
+        label: no-tools
+        severity: soft
+        expect:
+          usedNoTools: true
+      - type: reply
+        label: price-named-in-dollars
+        severity: soft
+        expect:
+          matches: "[Dd]ollars?"

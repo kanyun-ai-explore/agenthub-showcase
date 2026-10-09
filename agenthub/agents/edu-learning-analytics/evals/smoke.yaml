@@ -1,0 +1,53 @@
+apiVersion: agenthub/v1alpha1
+kind: EvalSuite
+purpose: regression
+
+# 冒烟：学情分析师的周报主路径。CLAUDE.md 卡片一节写死了数字来源：present_report
+# 的每个数字都必须原样来自 get_weekly_report（它在沙箱里真的读 CSV 现算），
+# 不许心算、目测、抽样估算。冒烟钉「真的查了数据、真的出了卡」这条轨迹；
+# 数字对不对、解读是否可行动属于 capability suite。
+
+cases:
+  - id: liveness
+    description: 打招呼能完成回合；问答不调工具。
+    turns:
+      - user: "你好，学情分析师能帮我做什么？"
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: transcript
+        label: qna-no-tools
+        severity: soft
+        expect:
+          usedNoTools: true
+
+  - id: weekly-report-card
+    description: >-
+      周报卡主路径：get_weekly_report 现算一周数据，present_report 渲染成卡。
+      正文应写卡片之外的东西（该行动的信号、数据质量披露），是行为倾向，放 soft。
+    turns:
+      - user: "用样例数据帮我出一张 2026-08-10 那一周的周报卡。"
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: transcript
+        label: data-computed-not-guessed
+        severity: gate
+        expect:
+          calledTool: { name: mcp__course__get_weekly_report, times: ">=1" }
+      - type: transcript
+        label: report-card-presented
+        severity: gate
+        expect:
+          calledTool: { name: mcp__course__present_report, times: ">=1" }
+      - type: reply
+        label: actionable-note-in-prose
+        severity: soft
+        expect:
+          matches: "建议|告警|数据质量|丢弃|行动|关注"

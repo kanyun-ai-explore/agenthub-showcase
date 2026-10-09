@@ -1,0 +1,108 @@
+apiVersion: agenthub/v1alpha1
+kind: EvalSuite
+purpose: regression
+
+# 冒烟：Emma 老师是协议驱动的 agent——课程页只在四个时刻发消息（开头带【】标签），
+# 每个标签该做什么、不该调什么工具都是 CLAUDE.md 的明文契约：
+#   【出题】  分两批调 present_lesson（先 2 道再 6 道，同一个 lesson_id），正文留空
+#   【结算】  先写一句中文点评，再调一次 present_lesson 出齐下一关，调完不写字
+#   【为什么】 一两句中文讲一题，不调任何工具
+#
+# 这个 agent 刚上线不久，行为未经真实流量校准：gate 只保留回合完成这类结构性
+# 断言，工具轨迹与协议纪律放 soft 观察位——soft 违例在 run 详情页照样可见
+# （softMisses），但不制造红灯墙。连续 3 次 run 无 soft 违例后再升 gate。
+#
+# present_lesson 断言写 ">=2" 而不是恰好 2：协议要求【出题】分两批（2 道 + 6 道），
+# 写 >=2 能抓「一批出完」的偷懒；某批入参不合法时按报错整批重调是允许的恢复路径，
+# 不该被判红。
+
+cases:
+  - id: lesson-generation
+    description: >-
+      【出题】协议：页面在后台要一关的题——分两批调 present_lesson（先 2 道再
+      6 道），不绕去单题工具，不写任何字。
+    turns:
+      - user: >-
+          【出题】lesson_id=u1-l2。孩子要开第 1 单元第 2 关「我喜欢的东西」，
+          请出这一关的题。
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: transcript
+        label: lesson-in-two-batches
+        severity: soft
+        expect:
+          calledTool: { name: mcp__course__present_lesson, times: ">=2" }
+      - type: transcript
+        label: no-single-tool-detour
+        severity: soft
+        expect:
+          forbiddenTools:
+            [
+              mcp__course__get_lesson,
+              mcp__course__present_slide,
+              mcp__course__present_suggestions,
+              mcp__course__present_exercise,
+              mcp__course__present_listen_choice,
+              mcp__course__present_word_bank,
+              mcp__course__present_fill_blank,
+              mcp__course__present_read_aloud,
+            ]
+      - type: reply
+        label: no-chatter
+        severity: soft
+        expect:
+          excludes: "出好了|两批|出完"
+
+  - id: settlement-next-lesson
+    description: >-
+      【结算】协议：先写一句中文点评（三十字以内、只写在调工具之前），再调一次
+      present_lesson 把下一关 8 道一批出齐，专门练这一关错过的点。
+    turns:
+      - user: >-
+          【结算】孩子做完了第 1 单元第 1 关「打招呼」：8 道首次答对 6 道，用时
+          3 分钟。错过的题：1) listen_choice，正确答案 I like milk，孩子选了
+          I like cake；2) fill_blank，This ___ milk.（正确答案 is），孩子选了 am。
+          下一关是第 1 单元第 2 关「我喜欢的东西」，lesson_id=u1-l2。
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: reply
+        label: one-line-chinese-comment
+        severity: soft
+        expect:
+          matches: "[一-龥]"
+      - type: transcript
+        label: next-lesson-batched
+        severity: soft
+        expect:
+          calledTool: { name: mcp__course__present_lesson, times: ">=1" }
+
+  - id: why-explanation
+    description: 【为什么】协议：一两句中文讲一题，不调任何工具。
+    turns:
+      - user: >-
+          【为什么】题目（listen_choice）：听到的是 This is milk.，孩子选了
+          This is cake.。
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: transcript
+        label: no-tools
+        severity: soft
+        expect:
+          usedNoTools: true
+      - type: reply
+        label: chinese-explanation
+        severity: soft
+        expect:
+          matches: "[一-龥]"
