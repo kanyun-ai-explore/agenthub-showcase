@@ -1,0 +1,58 @@
+apiVersion: agenthub/v1alpha1
+kind: EvalSuite
+purpose: regression
+
+# 冒烟：豆豆老师的两条主路径——打招呼、上一节凑十法的课。course MCP 经网关 remote
+# 注入（不需要 allowStdioMcp）。判定只走客观工具轨迹：开课先 get_lesson 看教学
+# 大纲、内容用 present_slide 放上屏幕，是 CLAUDE.md「怎么推进」的明文顺序。
+#
+# 学情工具 get_student_progress 在注册行上声明了 always_ask（人工审批）——eval
+# 会话里网关会当场自动拒绝这类调用，所以冒烟不设计依赖学情数据的路径。
+# 讲得好不好（语言是否孩子能懂、一次一个点）属于 capability suite（llm grader），
+# 不在冒烟范围。
+
+cases:
+  - id: liveness
+    description: 打招呼能完成回合；问答不调工具。
+    turns:
+      - user: "豆豆老师你好！你是谁呀？"
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: transcript
+        label: qna-no-tools
+        severity: soft
+        expect:
+          usedNoTools: true
+
+  - id: teach-carry-addition
+    description: >-
+      上课主路径：孩子想学 9+4，按 CLAUDE.md 先 get_lesson 看教学大纲，再用
+      present_slide 现编一页课件。出题（present_exercise）在同一轮之后也常见，
+      但不是硬契约，放 soft。
+    turns:
+      - user: "豆豆老师，我想学 9 加 4 怎么算，教教我吧。"
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: transcript
+        label: lesson-outline-read
+        severity: gate
+        expect:
+          calledTool: { name: mcp__course__get_lesson, times: ">=1" }
+      - type: transcript
+        label: slide-presented
+        severity: gate
+        expect:
+          calledTool: { name: mcp__course__present_slide, times: ">=1" }
+      - type: transcript
+        label: exercise-offered
+        severity: soft
+        expect:
+          calledTool: { name: mcp__course__present_exercise, times: ">=1" }

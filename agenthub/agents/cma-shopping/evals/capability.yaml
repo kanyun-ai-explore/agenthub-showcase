@@ -1,0 +1,65 @@
+apiVersion: agenthub/v1alpha1
+kind: EvalSuite
+purpose: capability
+
+# 能力：ACME 导购「导得好不好」。smoke 断言硬轨迹（搜了、出对比卡、查了政策）；
+# 这层评导购质量——推荐贴不贴合需求预算、取舍说不说得清、有没有编数据，全部
+# 来自其 CLAUDE.md 明文（fit not promote / ground every factual statement /
+# prose to a sentence or two）。
+#
+# judgeModel=qwen3-vl-flash：被测是本 agent 的 deepseek-v4-flash，≠ 被测，
+# 通用配置。case 取自 CMA README 的真实 Try 场景（与 smoke 同源、判不同层）。
+
+defaults:
+  judgeModel: qwen3-vl-flash
+
+cases:
+  - id: budget-fit-recommendation
+    description: >-
+      有预算上限的露营帐篷咨询：推荐贴合「家庭露营、不要太重、¥1800 内」，
+      明说取舍，不越预算硬推。
+    turns:
+      - user: >-
+          I'm taking my partner and our 6-year-old camping for the first time
+          next month. We need a tent — nothing too heavy to deal with, ideally
+          under ¥1800.
+    allowStdioMcp: true
+    trials: 2
+    passPolicy: any
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: llm
+        label: shopping-quality
+        severity: soft
+        rubric: rubrics/shopping-quality.md
+        dimensions: [需求贴合不推销, 有据不编, 表达克制]
+        threshold: 0.7
+        graderVersion: 1
+
+  - id: policy-answered-from-tool
+    description: >-
+      退货时效问题：答案必须来自本轮 search_policies 的结果（退货窗口按下单/
+      送达日怎么算、什么情况不能退），逐字以工具返回为准——CLAUDE.md 明文的
+      政策红线场景。
+    turns:
+      - user: "Can I still return the yoga mat I ordered from you a while back? It's unused."
+    allowStdioMcp: true
+    trials: 2
+    passPolicy: any
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: llm
+        label: shopping-quality
+        severity: soft
+        rubric: rubrics/shopping-quality.md
+        dimensions: [有据不编, 表达克制]
+        threshold: 0.7
+        graderVersion: 1

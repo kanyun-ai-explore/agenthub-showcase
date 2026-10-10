@@ -1,0 +1,60 @@
+apiVersion: agenthub/v1alpha1
+kind: EvalSuite
+purpose: capability
+
+# 能力：Emma 老师两个纯文字协议的回复质量——【为什么】讲得清不清、【结算】点
+# 评得具不具体。smoke 只断言「调没调工具、有没有中文」，语义质量交给 llm grader。
+#
+# judge 用 qwen3-vl-flash：同 `model` 服务、生产实证可用，≠ 被测
+# deepseek-v4-flash；跨厂商判分。
+defaults:
+  judgeModel: qwen3-vl-flash
+
+cases:
+  - id: why-explanation-quality
+    description: >-
+      【为什么】协议：讲一道一年级填空错题——先说对的为什么对，再点出孩子
+      选的差在哪，一两句中文。
+    turns:
+      - user: >-
+          【为什么】题目（fill_blank）：This ___ milk.（正确答案 is），孩子选了 am。
+    trials: 2
+    passPolicy: any
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: llm
+        label: protocol-reply-quality
+        severity: soft
+        rubric: rubrics/protocol-reply-quality.md
+        dimensions: [讲解针对性, 语言简明]
+        threshold: 0.7
+        graderVersion: 1
+
+  - id: settlement-comment-quality
+    description: >-
+      【结算】协议：一句中文点评——先具体说哪里做得好，再指出最该再练的一个点，
+      四十字以内。
+    turns:
+      - user: >-
+          【结算】孩子做完了第 1 单元第 1 关「打招呼」：8 道首次答对 6 道。错过的
+          题：listen_choice，正确答案 I like milk，孩子选了 I like cake。下一关是
+          「我喜欢的东西」，lesson_id=u1-l2。
+    trials: 2
+    passPolicy: any
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: llm
+        label: protocol-reply-quality
+        severity: soft
+        rubric: rubrics/protocol-reply-quality.md
+        dimensions: [讲解针对性, 语言简明]
+        threshold: 0.7
+        graderVersion: 1

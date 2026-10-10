@@ -1,0 +1,59 @@
+apiVersion: agenthub/v1alpha1
+kind: EvalSuite
+purpose: capability
+
+# userSim：LLM 扮演用户的多轮 case——最后一种 case 形态的示范。脚本
+# turns 测「给定输入的行为」；userSim 的用户由 simModel 按 persona + goal 现场
+# 生成，测「面对真实小孩的多轮应对」。
+#
+# 按官方编写指南的三条纪律写的：
+# - purpose 必须 capability（含 userSim 的 suite 解析期强制）
+# - persona 只写「会怎么说 + 知道什么」：6 岁孩子的语言、不知道 9+4 怎么算；
+# 不写放弃倾向（sim 指南不让「没耐心」触发放弃，只影响措辞）
+# - goal 写明确完成判据：说出 9+4=13 或答对练习
+#
+# simModel=deepseek-v4-flash：本 agent 的 deepseek 服务认识（judge 同款实证），
+# 与被测 deepseek-flash 不同 id（同厂不同型号——「同源放大过度配合」的警示
+# 已知，该服务可选面内已是最优）。
+#
+# ⚠️ userSim suite 不进 Pipeline（sim 对话时长装不进 20 分钟等待窗，结论记
+# userSim-not-pipeline-eligible）——需手动/CLI 触发执行。maxTurns 用尽≠错误，
+# 已实现的轨迹照常判分。
+
+defaults:
+  maxConcurrency: 5
+
+cases:
+  - id: first-grader-learns-carry-addition
+    description: >-
+      一个不知道 9+4 怎么算的一年级孩子，在多轮引导下学会（说出 9+4=13 或
+      答对练习）。看老师能否把课带完：出课件、出练习、对孩子的回答有回应。
+    userSim:
+      persona: >-
+        你是一个一年级的男孩，6 岁。说话很短、很口语，像真的 6 岁小孩：会说
+        「我不会嘛」「这个我懂一点点」「奥特曼也可厉害了」。你不知道 9 加 4
+        怎么算，也没学过凑十法；你会数手指，老师让你数你就数。老师讲的东西
+        你当下能记住一小步，隔一轮可能就忘了，需要老师再带一遍。
+      goal: >-
+        学会 9 加 4：在老师的引导下自己数出来或算出来，说出 9+4=13，或者
+        答对老师出的一道 9+4 的练习题。做到任一个就算完成，然后告诉老师
+        「我会了」。
+      opening: "豆豆老师，9 加 4 好难呀，我不会算。"
+      maxTurns: 6
+      simModel: deepseek-v4-flash
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: transcript
+        label: slides-across-lesson
+        severity: soft
+        expect:
+          calledTool: { name: mcp__course__present_slide, times: ">=2" }
+      - type: transcript
+        label: exercise-reached
+        severity: soft
+        expect:
+          calledTool: { name: mcp__course__present_exercise, times: ">=1" }

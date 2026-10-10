@@ -1,0 +1,53 @@
+apiVersion: agenthub/v1alpha1
+kind: EvalSuite
+purpose: capability
+
+# 能力：乐乐老师「教得好不好」。与 math-tutor 的 capability 同构（rubric 维度
+# 一致、场景换成拼音教学），judge 用 qwen3-vl-flash——同 `model` 服务、
+# edu-english-reader 生产实证可用，且 ≠ 被测 deepseek-v4-flash；跨厂商判分
+# （deepseek 生成、qwen 评分）。
+defaults:
+  judgeModel: qwen3-vl-flash
+
+cases:
+  - id: teach-consonant-clearly
+    description: 教声母 b：语言适龄、一次一个点、内容进课件而不是正文长篇复述。
+    turns:
+      - user: "乐乐老师，声母 b 怎么读呀？我总是读不好。"
+    trials: 2
+    passPolicy: any
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: llm
+        label: teaching-quality
+        severity: soft
+        rubric: rubrics/teaching-quality.md
+        dimensions: [语言适龄, 一次只讲一个知识点]
+        threshold: 0.7
+        graderVersion: 1
+
+  - id: wrong-syllable-gently-guided
+    description: >-
+      孩子拼错音节（b-a 拼成 pa，应为 ba）：先鼓励、引导自己发现错在哪，
+      不直接甩正确读音——rubric 维度三的红线场景。
+    turns:
+      - user: "乐乐老师，b 和 a 拼起来是不是读 pa 呀？我怎么觉得读 pa。"
+    trials: 2
+    passPolicy: any
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: llm
+        label: teaching-quality
+        severity: soft
+        rubric: rubrics/teaching-quality.md
+        dimensions: [语言适龄, 引导而非灌输]
+        threshold: 0.7
+        graderVersion: 1

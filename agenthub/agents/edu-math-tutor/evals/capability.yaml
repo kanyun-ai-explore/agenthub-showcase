@@ -1,0 +1,121 @@
+apiVersion: agenthub/v1alpha1
+kind: EvalSuite
+purpose: capability
+
+# 能力：豆豆老师「教得好不好」。smoke（同目录 smoke.yaml）回答「活没活、主路径通
+# 不通」，这层回答「教学质量」——语言是否适龄、是否一次一个点、答错时是否引导，
+# 由 llm grader 按 rubrics/teaching-quality.md 打分，确定性 grader 做不了这个判断。
+#
+# capability 语义：不阻断发布门禁（purpose 分流），分数进趋势页看走势，配合滑动
+# 基线发现「教学质量悄悄变差」。
+#
+# 与 smoke 的两点刻意不同：
+# - trials: 2 + passPolicy: any——llm judge 有方差，能力判定取「两次里有一次达标」；
+#   能力层不是红线，信号优先于严格
+# - llm grader 的 severity 全 soft：分数低是黄色警告，不是红色故障
+#
+# ⚠️ 未验证前置：judgeModel 用的 deepseek-v4-flash（项目模型服务 `model` 上的模型）
+# 是否放行评分用途没在平台上核过（judge 走 ModelGate）。若首次 run 报 judge 相关
+# 错误，先核这里再动 rubric。
+# 防自评：被测模型是本 agent 的 deepseek-flash（`deepseek` 服务），judge 是
+# deepseek-v4-flash——两个不同的模型，resolve 层的「judge ≠ 被测」校验可过。
+
+defaults:
+  judgeModel: deepseek-v4-flash
+
+cases:
+  - id: teach-new-concept-clearly
+    description: >-
+      教一个新知识点（9+4 凑十法）：看语言适龄、一次一个点、内容进课件而不是
+      正文长篇复述。
+    turns:
+      - user: "豆豆老师，9 加 4 等于几呀？我不会算。"
+    trials: 2
+    passPolicy: any
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: transcript
+        label: slide-presented
+        severity: soft
+        expect:
+          calledTool: { name: mcp__course__present_slide, times: ">=1" }
+      - type: llm
+        label: teaching-quality
+        severity: soft
+        rubric: rubrics/teaching-quality.md
+        # 维度必填（llm-grader.ts：无维度直接 errored）；本 case 没有「答错」语境，
+        # 引导维度不适用——按 case 拆维度，而不是让 judge 打 UNKNOWN
+        # （任一维度 UNKNOWN 会让整个 grader 记 skipped）。
+        dimensions: [语言适龄, 一次只讲一个知识点]
+        threshold: 0.7
+        graderVersion: 1
+
+  - id: wrong-answer-gently-guided
+    description: >-
+      孩子答错（9+4 算成 14）：看是否先鼓励、引导自己发现错在哪，而不是直接甩
+      正确答案或打击。rubric 维度三只在这种对话里打分。
+    turns:
+      - user: "豆豆老师，9 加 4 是不是等于 14 呀？"
+    trials: 2
+    passPolicy: any
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: llm
+        label: teaching-quality
+        severity: soft
+        rubric: rubrics/teaching-quality.md
+        dimensions: [语言适龄, 一次只讲一个知识点, 引导而非灌输]
+        threshold: 0.7
+        graderVersion: 1
+
+  - id: teach-telling-time
+    description: >-
+      教另一个新知识点（认识整点）：检验的不是凑十法，是教学质量的稳定性——换一个
+      主题仍然语言适龄、一次一个点。
+    turns:
+      - user: "豆豆老师，钟表上短针指着 3，长针指着 12，这是几点呀？我不认识时间。"
+    trials: 2
+    passPolicy: any
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: llm
+        label: teaching-quality
+        severity: soft
+        rubric: rubrics/teaching-quality.md
+        dimensions: [语言适龄, 一次只讲一个知识点]
+        threshold: 0.7
+        graderVersion: 1
+
+  - id: encourage-after-repeated-wrong
+    description: >-
+      孩子连错受挫、自我否定（"我是不是太笨了"）：看是否先具体鼓励、再引导，
+      不出现任何打击性表述——rubric 维度三的红线场景。
+    turns:
+      - user: "豆豆老师，我又算错了，9 加 4 还是等于 14……我是不是太笨了。"
+    trials: 2
+    passPolicy: any
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: llm
+        label: teaching-quality
+        severity: soft
+        rubric: rubrics/teaching-quality.md
+        dimensions: [语言适龄, 引导而非灌输]
+        threshold: 0.7
+        graderVersion: 1

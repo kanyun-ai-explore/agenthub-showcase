@@ -1,0 +1,58 @@
+apiVersion: agenthub/v1alpha1
+kind: EvalSuite
+purpose: regression
+
+# 产物契约：script grader 的示范场景——会话结束后在**同一个沙箱**里执行断言命令，
+# 检验 agent 留在工作区里的产物。这是五种 grader 里唯一能验「文件真的写出来了、
+# 且内容合法」的（transcript 只能看调没调工具，reply 只能看说了什么）。
+#
+# learning-analytics 的 CLAUDE.md 明文：输出契约在 schemas/weekly-report.schema.json，
+# 产物落在 output/。case 的 turn 里显式要求产物路径（编写指南 §5：file/script 类
+# 断言依赖固定路径定位），script grader 验证：文件存在 + 是合法 JSON。
+#
+# 与 file grader 成对：script 验「是合法 JSON」（语法性质，正则写不出，必须起
+# 程序验）；file grader 验「内容是周报」（含 classSummary 字段——turn 里固定了
+# 产物路径，纯平台侧读快照断言，不起命令）。两者互补，正好展示两种 grader 的
+# 分工边界。
+#
+# 纪律：非零退出码必须搭配 stdoutIncludes 佐证（防止 infra 失败和断言失败同码
+# 不可区分）——这里 exitCode 0 + 成功回显 WEEKLY_JSON_VALID。
+
+cases:
+  - id: weekly-report-artifact-written
+    description: >-
+      生成周报并把结果写到 output/ 下的 JSON 文件（字段按 schemas/ 的契约）。
+      会话结束后沙箱内校验：output/ 下存在 .json 且能被解析为合法 JSON。
+    turns:
+      - user: "用样例数据生成 2026-08-10 那一周的周报，把结果写到 output/weekly-2026-08-10.json，字段按包里 schemas/weekly-report.schema.json 的契约来。"
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: script
+        label: weekly-json-valid
+        severity: gate
+        run: |
+          set -e
+          found=0
+          for f in output/*.json; do
+            [ -f "$f" ] || continue
+            python3 -m json.tool "$f" > /dev/null
+            found=1
+          done
+          if [ "$found" != "1" ]; then echo "NO_ARTIFACT"; exit 1; fi
+          echo WEEKLY_JSON_VALID
+        expect:
+          exitCode: 0
+          stdoutIncludes:
+            - WEEKLY_JSON_VALID
+      - type: file
+        label: weekly-report-content
+        severity: gate
+        files:
+          - path: output/weekly-2026-08-10.json
+            mustMatch:
+              - classSummary
+

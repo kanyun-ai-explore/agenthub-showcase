@@ -1,0 +1,75 @@
+apiVersion: agenthub/v1alpha1
+kind: EvalSuite
+purpose: regression
+
+# 冒烟：小豆的两条主路径——试听排期、课程介绍。CLAUDE.md 的数据纪律：
+# 课程、价格、试听排期都要**查**，不要凭印象说，get_course_catalog 和
+# get_trial_slots 是唯一数据来源；讲方案调 present_course_plan、问试听调
+# present_trial_slots。冒烟把「查了数据源」钉进 gate，报出的价格/时间本身
+# 来自 mock 目录、内容固定，不单独断言。
+
+cases:
+  - id: liveness
+    description: 打招呼能完成回合；问答不调工具。
+    turns:
+      - user: "你好呀。"
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: transcript
+        label: qna-no-tools
+        severity: soft
+        expect:
+          usedNoTools: true
+
+  - id: trial-slots-from-data
+    description: >-
+      家长问试听：排期必须来自 get_trial_slots（唯一数据来源），并调
+      present_trial_slots 把名额卡发出去。
+    turns:
+      - user: "孩子想先试听一节，最近都有什么时间可以约呀？"
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: transcript
+        label: slots-read-from-source
+        severity: gate
+        expect:
+          calledTool: { name: mcp__course__get_trial_slots, times: ">=1" }
+      - type: transcript
+        label: slots-card-presented
+        severity: gate
+        expect:
+          calledTool: { name: mcp__course__present_trial_slots, times: ">=1" }
+      - type: transcript
+        label: followup-chips
+        severity: soft
+        expect:
+          calledTool: { name: mcp__course__present_suggestions, times: ">=1" }
+
+  - id: course-intro-grounded
+    description: 课程介绍要查目录（get_course_catalog），不凭印象编内容。
+    turns:
+      - user: "给我介绍下一年级数学思维训练营都教些什么吧。"
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: transcript
+        label: catalog-read
+        severity: gate
+        expect:
+          calledTool: { name: mcp__course__get_course_catalog, times: ">=1" }
+      - type: transcript
+        label: plan-card-presented
+        severity: soft
+        expect:
+          calledTool: { name: mcp__course__present_course_plan, times: ">=1" }

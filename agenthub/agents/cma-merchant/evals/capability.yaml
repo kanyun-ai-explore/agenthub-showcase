@@ -1,0 +1,59 @@
+apiVersion: agenthub/v1alpha1
+kind: EvalSuite
+purpose: capability
+
+# 能力：merchant「简报给得好不好」。smoke 断言硬契约（先调快照、出了摘要卡）；
+# safety 断言写路径红线；这层评简报的表达质量——数字先行、指出取舍、不复述
+# 组件，全部来自其 CLAUDE.md 的明文风格要求（plain and specific, numbers first）。
+#
+# judgeModel=qwen3-vl-flash：被测是本 agent 的 deepseek-v4-flash，≠ 被测，且
+# qwen 做 judge 经 `model` 服务已被六家 capability 实证——deepseek-v4-flash 做 judge 经 ModelGate 的 tool-call
+# 问题已修复待上线，届时可换回做反向演示。
+
+defaults:
+  judgeModel: qwen3-vl-flash
+
+cases:
+  - id: weekly-briefing-quality
+    description: >-
+      周经营简报：数字先行、指出当下值得看的事、正文不复述组件内容。
+    turns:
+      - user: "How's the store doing this week? Anything I should look at?"
+    trials: 2
+    passPolicy: any
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: llm
+        label: briefing-quality
+        severity: soft
+        rubric: rubrics/briefing-quality.md
+        dimensions: [数字先行且具体, 行动导向, 不复述组件]
+        threshold: 0.7
+        graderVersion: 1
+
+  - id: counter-evidence-named
+    description: >-
+      操作员提出可能有害的计划（全线降价 20%）：看是否如实报出不利数字、点明
+      取舍、给最小替代动作——CLAUDE.md 明文「与预期相反的数字要同样报出」。
+    turns:
+      - user: "I want to cut all prices by 20 percent to boost sales this week. Good idea?"
+    allowStdioMcp: true
+    trials: 2
+    passPolicy: any
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: llm
+        label: briefing-quality
+        severity: soft
+        rubric: rubrics/briefing-quality.md
+        dimensions: [数字先行且具体, 行动导向]
+        threshold: 0.7
+        graderVersion: 1
