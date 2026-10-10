@@ -1,0 +1,64 @@
+apiVersion: agenthub/v1alpha1
+kind: EvalSuite
+purpose: capability
+
+# 能力：批改小助手「反馈给得好不好」。smoke 回答「活没活、卡片发没发」，这层由
+# llm grader 按 rubrics/homework-feedback-quality.md 评反馈质量——错因点得清不清、
+# 引导分不分层、语气鼓不鼓励。
+#
+# capability 语义：不阻断发布门禁，分数进趋势页看走势。trials: 2 + passPolicy: any
+# ——judge 有方差，能力层信号优先于严格。
+#
+# judge 用 qwen3-vl-flash：被测模型是本 agent 的 deepseek-v4-flash，judge 必须不同
+# （resolve 层防自评硬校验），同时演示跨厂商判分（deepseek 被 qwen 评）。
+# 选 qwen3-vl-flash 的依据：edu-english-reader 以同一 `model` 服务在生产跑该模型
+# ——ModelGate 对该 id 的路由与鉴权是实证可用的（glm-5.3-flash 首探失败，根因另查，
+# 见 平台 issue）。剩余风险：qwen 经 Anthropic 兼容端点做 forced tool-call 判分
+# 的表现，由首跑实证。
+
+defaults:
+  judgeModel: qwen3-vl-flash
+
+cases:
+  - id: wrong-answer-well-corrected
+    description: >-
+      孩子交了答错的题求确认（13-5=9，应为 8）：看是否点名错在哪一步、先引导
+      而非直接报答案、语气鼓励。
+    turns:
+      - user: "我算了一下 13-5=9，对吗？帮我看看。"
+    trials: 2
+    passPolicy: any
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: llm
+        label: feedback-quality
+        severity: soft
+        rubric: rubrics/homework-feedback-quality.md
+        dimensions: [反馈具体性, 分层引导, 语气鼓励]
+        threshold: 0.7
+        graderVersion: 1
+
+  - id: answer-begging-gently-refused
+    description: >-
+      孩子不会做、直接要答案：看是否温和引导而不直接给（分层引导的红线场景）。
+    turns:
+      - user: "8+5 我不会算，你直接告诉我答案吧，求你了。"
+    trials: 2
+    passPolicy: any
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: llm
+        label: feedback-quality
+        severity: soft
+        rubric: rubrics/homework-feedback-quality.md
+        dimensions: [分层引导, 语气鼓励]
+        threshold: 0.7
+        graderVersion: 1

@@ -9,11 +9,13 @@ purpose: regression
 # catalog: examples/retail/data/catalog.json is the fixture both that README and
 # this package's embedded MockRetail read.
 #
-# 流水线的 `eval` 步骤需要 test 槽位上有一个已发布的版本，而这需要先建好
-# `cma-python` Environment 并注册 `storefront` managed MCP（仓库里 agent.yaml 的
-# mcpServers 是占位 id）。
-# 打分器故意全用确定性的（transcript / reply），不用 `llm` grader；这些用例覆盖的
-# 工具层，离线部分已由 runtime/tests/smoke_stdio.py 和 smoke_http_backend.py 验过。
+# Runnable since 2026-09-08: the `cma-python` Environment and the `storefront`
+# managed MCP are registered on the platform (see docs/platform-checklist.md;
+# eval sessions for these cases complete turns on the platform — pipeline run
+# d00431a6). Graders are deterministic (transcript/reply) on purpose, no `llm`
+# grader — see runtime/tests/smoke_stdio.py and runtime/tests/smoke_http_backend.py
+# for what's already verified offline, without a platform session, for the tool
+# layer these cases exercise end to end.
 
 cases:
   - id: readme-camping-trip-flow

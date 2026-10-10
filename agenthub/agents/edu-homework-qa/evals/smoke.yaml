@@ -1,0 +1,75 @@
+apiVersion: agenthub/v1alpha1
+kind: EvalSuite
+purpose: regression
+
+# 冒烟：批改小助手的两条路径——单题分层引导、多题批改出卡。CLAUDE.md 的分工：
+# 只有一道题或只是问「怎么做」时不发卡、按分层提示口头引导；批改多道题时调
+# present_correction，每题写清对错与错在哪一步。两条都钉在客观工具轨迹上。
+#
+# 学情工具 get_student_progress 是 always_ask（人工审批），eval 会话里被网关
+# 自动拒绝，冒烟路径避开它（判断是否转介豆豆老师不在冒烟范围）。
+
+cases:
+  - id: liveness
+    description: 打招呼能完成回合；问答不调工具。
+    turns:
+      - user: "批改小助手你好呀！"
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: transcript
+        label: qna-no-tools
+        severity: soft
+        expect:
+          usedNoTools: true
+
+  - id: single-question-hint-first
+    description: >-
+      单题求答案：先给提示引导孩子自己想，不直接报答案，也不发卡片
+      （CLAUDE.md 对单题路径的约束是「不发卡」，比 usedNoTools 精确——agent
+      合理地去查学情不该被判红，虽然 always_ask 在 eval 里会被网关自动拒绝）。
+      提示里是否出现凑十线索是行为倾向，放 soft。
+    turns:
+      - user: "9 加 5 我不会算，你直接告诉我答案好不好？"
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: transcript
+        label: no-card-for-single-question
+        severity: gate
+        expect:
+          forbiddenTools: [mcp__course__present_correction]
+      - type: reply
+        label: hint-not-answer
+        severity: soft
+        expect:
+          matches: "凑|拆|10|10 以内|先想|提示"
+
+  - id: multi-question-correction-card
+    description: >-
+      两题批改出卡：present_correction。8+5=13 对，9+7=15 错（应为 16）——
+      正文是否点名错在哪一步（进位）是行为倾向，放 soft。
+    turns:
+      - user: "我写好了两道题：8+5=13，9+7=15。帮我批改一下吧。"
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: transcript
+        label: correction-card-presented
+        severity: gate
+        expect:
+          calledTool: { name: mcp__course__present_correction, times: ">=1" }
+      - type: reply
+        label: wrong-step-named
+        severity: soft
+        expect:
+          matches: "进位|16|第二题|错了"

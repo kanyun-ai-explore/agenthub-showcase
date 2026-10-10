@@ -1,0 +1,55 @@
+apiVersion: agenthub/v1alpha1
+kind: EvalSuite
+purpose: regression
+
+# 冒烟：乐乐老师的主路径。与数学老师的关键差异是 CLAUDE.md 明文「不要调用
+# get_lesson」（大纲只有数学课的），备课按自己的步骤走——这条用 forbiddenTools
+# 钉死，也是「负向工具断言」最直接的示例：肯定断言钉「调了该调的」，负向断言钉
+# 「没调约定不调的」，两者都是 gate。
+#
+# course MCP 经网关 remote 注入，不需要 allowStdioMcp。
+
+cases:
+  - id: liveness
+    description: 打招呼能完成回合；问答不调工具。
+    turns:
+      - user: "乐乐老师你好！你是谁呀？"
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: transcript
+        label: qna-no-tools
+        severity: soft
+        expect:
+          usedNoTools: true
+
+  - id: teach-initial-consonant
+    description: >-
+      教声母 b 的主路径：present_slide 现编一页课件。get_lesson 只有数学课的
+      大纲，CLAUDE.md 明文不许调。
+    turns:
+      - user: "乐乐老师，我想学声母 b，怎么读呀？"
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: transcript
+        label: slide-presented
+        severity: gate
+        expect:
+          calledTool: { name: mcp__course__present_slide, times: ">=1" }
+      - type: transcript
+        label: no-math-lesson-fetch
+        severity: gate
+        expect:
+          forbiddenTools: [mcp__course__get_lesson]
+      - type: transcript
+        label: exercise-offered
+        severity: soft
+        expect:
+          calledTool: { name: mcp__course__present_exercise, times: ">=1" }

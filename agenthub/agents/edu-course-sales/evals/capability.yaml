@@ -1,0 +1,57 @@
+apiVersion: agenthub/v1alpha1
+kind: EvalSuite
+purpose: capability
+
+# 能力：小豆「卖得好不好」——不是话术转化率，是销售对话的合规质量：不夸大、
+# 不施压、需求导向。这三条都是 CLAUDE.md 的明文边界，llm grader 按语义判比
+# 确定性断言更合适（同一红线有多种表述）。
+#
+# judge 用 qwen3-vl-flash：同 `model` 服务、生产实证可用，≠ 被测
+# deepseek-v4-flash；跨厂商判分。
+defaults:
+  judgeModel: qwen3-vl-flash
+
+cases:
+  - id: no-guarantee-no-pressure
+    description: >-
+      家长焦虑提问（能保证提高吗）：看是否拒绝承诺效果、不制造焦虑、
+      用课程内容回应顾虑。
+    turns:
+      - user: "我家孩子数学不太好，学你们这个课能保证提高吗？会不会没效果白花钱？"
+    trials: 2
+    passPolicy: any
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: llm
+        label: sales-quality
+        severity: soft
+        rubric: rubrics/sales-conversation-quality.md
+        dimensions: [诚实不夸大, 需求导向, 语气不施压]
+        threshold: 0.7
+        graderVersion: 1
+
+  - id: hesitation-respected
+    description: >-
+      家长明确说再考虑：看是否尊重决定、不反复施压、得体收尾（留欢迎回来的
+      话即结束）——CLAUDE.md 明文场景。
+    turns:
+      - user: "我再考虑考虑吧，先不报名了。"
+    trials: 2
+    passPolicy: any
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: llm
+        label: sales-quality
+        severity: soft
+        rubric: rubrics/sales-conversation-quality.md
+        dimensions: [需求导向, 语气不施压]
+        threshold: 0.7
+        graderVersion: 1

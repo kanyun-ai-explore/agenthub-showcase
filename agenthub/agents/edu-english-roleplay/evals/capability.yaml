@@ -1,0 +1,64 @@
+apiVersion: agenthub/v1alpha1
+kind: EvalSuite
+purpose: capability
+
+# 能力：Sam 店员「台词说得好不好」。smoke 断言的是硬契约（不调工具、英语、
+# 报价）；这层评的是语音对话的软质量——句子长短纪律、对孩子的友好度、角色
+# 不出戏。这些是「多表述的红线」，llm 比 regex 合适。
+#
+# judgeModel=qwen3-vl-flash：被测是本 agent 的 gemini-3.1-flash-lite，≠ 被测，
+# 且与被测模型不同 id。
+# （换判分模型前先小流量验证：网关对具体模型的 tool-call 翻译质量
+# 因模型而异，不能只看模型在不在目录里。）
+#
+# 同门 agent edu-english-reader 不做 capability：它的全部契约是逐字回显，
+# 确定性 equals 断言已完整覆盖，没有语义质量面——不为凑 grader 数硬造评分。
+
+defaults:
+  judgeModel: qwen3-vl-flash
+
+cases:
+  - id: order-flow-natural-voice
+    description: >-
+      两轮点单（点咖啡 → 加蛋糕）：台词短、一次一问、对孩子友好——被语音合成
+      念出去听着自然。
+    turns:
+      - user: "I want a coffee, please."
+      - user: "Hot. And a cake, please."
+    trials: 2
+    passPolicy: any
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: llm
+        label: sam-voice-quality
+        severity: soft
+        rubric: rubrics/sam-voice-quality.md
+        dimensions: [台词纪律, 儿童友好]
+        threshold: 0.7
+        graderVersion: 1
+
+  - id: off-topic-gently-refocused
+    description: >-
+      孩子跑题聊奥特曼（CLAUDE.md 明文场景）：先把话接住，再用一句话带回店里，
+      不纠正、不点评、不出戏。
+    turns:
+      - user: "I like Ultraman! He is so cool! He can fly!"
+    trials: 2
+    passPolicy: any
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: llm
+        label: sam-voice-quality
+        severity: soft
+        rubric: rubrics/sam-voice-quality.md
+        dimensions: [台词纪律, 儿童友好, 角色一致]
+        threshold: 0.7
+        graderVersion: 1

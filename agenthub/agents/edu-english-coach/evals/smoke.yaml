@@ -1,0 +1,106 @@
+apiVersion: agenthub/v1alpha1
+kind: EvalSuite
+purpose: regression
+
+# 冒烟：Emma 老师是协议驱动的 agent——课程页只在四个时刻发消息（开头带【】标签），
+# 每个标签该做什么、不该调什么工具都是 CLAUDE.md 的明文契约：
+#   【出题】  只调 present_lesson（题目形状由服务端校验兜底），不写字
+#   【单元结算】【为什么】  纯文字点评，不调任何工具
+#
+# 这个 agent 2026-10-07 才上线，行为未经真实流量校准：gate 只保留回合完成这类
+# 结构性断言，工具轨迹与协议纪律全部放 soft 观察位——soft 违例在 run 详情页
+# 照样可见（softMisses），但不制造整片红灯。连续 3 次 run 无 soft 违例后，
+# 再把对应断言升回 gate。
+#
+# present_lesson 断言写 ">=1" 而不是恰好 1：入参不合法时服务端整批报错、按报错
+# 改好重调是 CLAUDE.md 允许的恢复路径，不该被判红。
+
+cases:
+  - id: lesson-generation
+    description: >-
+      【出题】协议：照学员错题出单元 3 的一关——只走 present_lesson，不绕去
+      单题工具，不写任何字。
+    turns:
+      - user: >-
+          【出题】lesson_id=u3-l1。学员在单元 1、2 错过的题（最近的在前）：
+          1) listen_choice，正确答案 I've been，学员选了 I'd been；
+          2) fill_blank，I have worked here ___ 2020.，正确答案 for，学员选了 since；
+          3) word_bank，翻译「我在这家公司工作两年了。」，学员语序错了。
+          请出单元 3 第 1 关。
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: transcript
+        label: lesson-batched
+        severity: soft
+        expect:
+          calledTool: { name: mcp__course__present_lesson, times: ">=1" }
+      - type: transcript
+        label: no-single-tool-detour
+        severity: soft
+        expect:
+          forbiddenTools:
+            [
+              mcp__course__get_lesson,
+              mcp__course__present_slide,
+              mcp__course__present_suggestions,
+              mcp__course__present_exercise,
+              mcp__course__present_listen_choice,
+              mcp__course__present_word_bank,
+              mcp__course__present_fill_blank,
+              mcp__course__present_read_aloud,
+            ]
+      - type: reply
+        label: no-chatter
+        severity: soft
+        expect:
+          excludes: "已出好|出好了|这一关"
+
+  - id: why-explanation
+    description: 【为什么】协议：一两句中文讲一题，不调任何工具。
+    turns:
+      - user: >-
+          【为什么】题目（fill_blank）：I have ___ (work) here for two years.
+          正确答案：have worked。学员选的：am working。
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: transcript
+        label: no-tools
+        severity: soft
+        expect:
+          usedNoTools: true
+      - type: reply
+        label: chinese-explanation
+        severity: soft
+        expect:
+          matches: "[一-龥]"
+
+  - id: unit-settlement
+    description: 【单元结算】协议：一两句中文单元点评，不调任何工具。
+    turns:
+      - user: >-
+          【单元结算】单元 1 五关首次答对数：5、4、4、5、3。错过的题：
+          ever / already 的用法、must 和 have to 的区别。
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: transcript
+        label: no-tools
+        severity: soft
+        expect:
+          usedNoTools: true
+      - type: reply
+        label: chinese-comment
+        severity: soft
+        expect:
+          matches: "[一-龥]"
