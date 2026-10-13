@@ -118,6 +118,37 @@
 [查看课程顾问的记忆文档](./agenthub/agents/edu-course-sales/memory/) ·
 [查看课程 MCP 实现](./apps/storefront-web/lib/course/mcp-tools.ts)
 
+### 实时语音：和 Agent 像打电话一样练口语
+
+| 角色 | 可以从什么开始 | 展示的效果 | Agent 定义 |
+| --- | --- | --- | --- |
+| 口语陪练 | 点「开始通话」，直接开口说英语 | 麦克风一直开着的实时语音通话，能接话也能打断；挂断后给一段中文点评和转写 | [edu-english-freetalk](./agenthub/agents/edu-english-freetalk/agent.yaml) |
+
+口语陪练是一个 `format: live` 的 Agent：不建沙箱、不挂 MCP，只有一份提示词，在 `agent.yaml` 里用 `voice.realtime` 声明实时语音。
+通话时浏览器和平台的实时语音网关之间是一条 WebSocket，麦克风音频上行、模型的原生音频下行。接入分四步：
+
+1. **写 Agent 包**：`agent.yaml` 声明 `voice.realtime`，同时声明 `voice.input` / `voice.output` 供回落时用。
+2. **服务端换票**：应用服务端用自己的平台 token 调 `sessions.createVoiceTicket`，换一张 60 秒有效、只能用一次的票。平台 token 不进浏览器。
+3. **浏览器建通话**：页面把票交给 SDK 的 `createRealtimeVoiceClient`，按回调画通话状态和转写。
+4. **连不上时回落**：票被拒、建连失败或麦克风拿不到时，页面退到按住说话的语音回合，同一个会话接着聊。
+
+> **当前状态**：按住说话的回落暂时不可用，实时通话正常，恢复后更新。
+
+照着做之前要自己准备：
+
+- 项目开通实时语音。没开通时换票会被平台拒绝，页面直接走回落。
+- 你站点的来源需要平台在实时语音网关上放行，接入前先向平台确认（本地调试时的来源是 `http://localhost:8000`）。没放行时建连失败，页面同样走回落。
+- 项目里注册一个模型服务，把 `agent.yaml` 的 `modelService` 换成它的名字。
+- 应用服务端的 token 带三个 scope：`runs:create`（建会话、换票、发回合）、`runs:stream`（读会话和回合）、`files:upload`（回落时上传录音）。
+- 环境变量 `AGENTHUB_TOKEN`、`AGENTHUB_PROJECT_ID`、`AGENTHUB_FREETALK_AGENT_ID`（这个 Agent 的 workload id）。只接这一个 Agent 时把 `AGENTHUB_AGENT_ID` 也填成同一个 id，站点的回合接口靠它判断有没有接上平台。
+- 页面在 HTTPS 或 localhost 下打开，浏览器才给麦克风。
+
+[查看 Agent 定义](./agenthub/agents/edu-english-freetalk/agent.yaml) ·
+[查看提示词](./agenthub/agents/edu-english-freetalk/CLAUDE.md) ·
+[查看换票接口](./apps/storefront-web/app/api/agenthub/voice-ticket/route.ts) ·
+[查看通话页面](./apps/storefront-web/components/mobile/FreeTalkApp.tsx) ·
+[查看回落判定](./apps/storefront-web/lib/agenthub/realtime-errors.ts)
+
 ## 如何在 AgentHub 上构建
 
 这些案例使用同一种构建方式：**在仓库中定义 Agent，把业务能力接成 MCP，由 AgentHub 管理发布与运行，应用通过 SDK 接入会话。**

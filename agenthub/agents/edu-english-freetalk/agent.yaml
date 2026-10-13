@@ -1,0 +1,31 @@
+apiVersion: agenthub/v1alpha1
+format: live
+
+# 英语自由对话。live 不建沙箱、不挂 MCP、调不了工具，指令只来自同目录的 CLAUDE.md。
+
+# live 必填：会话在创建时冻结一个项目级模型服务。⚠️ 名字按项目内解析，换成你项目里注册的那个。
+modelService: model
+# 只跑回落的按住说话和挂断后的文字点评；实时通话走下面的 voice.realtime，不经这个模型。
+model: gemini-3.1-flash-lite
+
+voice:
+  # 实时通话：浏览器直连平台的实时语音网关。provider / model / voice 从平台给的可选值里挑。
+  realtime:
+    provider: vertex-gemini-live
+    model: gemini-live-2.5-flash-native-audio
+    voice: Aoede
+    language: en-US
+  # 回落用：实时通话建不起来时页面退到按住说话（录音先转写，回复再合成）。不声明就没有回落。
+  input:
+    provider: modelgate
+    model: qwen3-asr-flash
+    language: en
+  output:
+    provider: modelgate
+    model: qwen3-tts-flash
+    voice: Cherry
+    format: mp3
+
+# 声明了 voice.realtime 就必须是 format: live，并且关掉记忆。
+memory:
+  enabled: false

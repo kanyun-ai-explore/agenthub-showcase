@@ -17,7 +17,7 @@ export interface CaseExtension {
 }
 
 /** 手机里放哪块界面。 */
-export type SurfaceApp = "shopping" | "merchant" | "wechat" | "classroom" | "english" | "roleplay";
+export type SurfaceApp = "shopping" | "merchant" | "wechat" | "classroom" | "english" | "roleplay" | "freetalk";
 
 export interface Surface {
   id: string;
@@ -490,6 +490,60 @@ memory:
         lessonTitle: "咖啡店",
         teacherName: "Sam",
         welcomeText: "你走进一家咖啡店，店员 Sam 在柜台后面。点一下开始，他会先跟你打招呼。",
+      },
+      {
+        id: "freetalk",
+        name: "自由对话",
+        persona: "青少年和成人",
+        tagline: "实时语音通话：麦克风一直开着，能接话也能打断",
+        intro:
+          "这个视角展示实时语音。和情景对话那种「按住说话、松手发」的对讲机不同，这里浏览器和平台的实时语音网关建了一条 WebSocket：麦克风的音频直接上去、模型的原生音频直接下来，中间没有「转写 → 文本模型 → 合成」三段，你还没说完它就能接话，它说的时候你也能点「打断」插话。票由站点服务端换：`POST /api/agenthub/voice-ticket` 先验访客身份和会话归属，再用站点的 token 去平台换一张 60 秒有效、只能用一次的票；票在 WebSocket 的子协议里交给网关，不进地址栏，也不进站点日志。通话的转写按轮次画在气泡里，你和 Ava 两边都有。挂断之后把转写随 `【点评】` 发给同一个会话，Ava 用中文写两三句点评，点「看点评」展开。线路建不起来的时候（平台还没在网关上放行站点的来源、票被拒、麦克风被拒、连着两次没有应答）页面落回情景对话那套「按住说话」，同一个会话、同一份提示词接着聊，页面上会写明「实时通话不可用，已切换为按住说话」。",
+        agent: "freetalk",
+        app: "freetalk",
+        meta: [
+          { label: "Agent", value: "edu-english-freetalk" },
+          { label: "运行时", value: "format: live（不建沙箱）" },
+          { label: "通话", value: "实时语音（WebSocket 双向流）" },
+          { label: "回落", value: "按住说话（同一个会话）" },
+          { label: "点评", value: "挂断后中文点评 + 转写原文" },
+        ],
+        capabilities: ["live", "realtime", "voice-turn", "file-agent", "session-turn", "model-gate"],
+        capabilityOverrides: {
+          live: { evidence: "agenthub/agents/edu-english-freetalk/agent.yaml 的 format: live" },
+          "file-agent": { evidence: "agenthub/agents/edu-english-freetalk/agent.yaml + CLAUDE.md" },
+          "model-gate": {
+            blurb:
+              "回落的按住说话和挂断后的文字点评走统一模型接入：转写 qwen3-asr-flash、合成 qwen3-tts-flash、正文模型 gemini-3.1-flash-lite，对应 agent.yaml 里的 `voice.input` / `voice.output` / `model` 三处。实时通话本身不经模型网关，它连的是平台的实时语音网关，由 `voice.realtime` 声明。",
+            evidence: "agenthub/agents/edu-english-freetalk/agent.yaml · voice.realtime 与 voice.input / voice.output",
+          },
+          "voice-turn": {
+            blurb:
+              "这一支的主力是实时语音，语音回合是它的回落：线路建不起来时，按住说话录一段，平台先转写再交给同一个 Agent，回复再合成分段音频播出来。两种说话方式声明在同一个 agent.yaml 里，所以回落不用换 Agent，也不用换会话。",
+            evidence: "agenthub/agents/edu-english-freetalk/agent.yaml · voice.input / voice.output",
+          },
+        },
+        openers: ["开始自由对话"],
+        agentFile: "agenthub/agents/edu-english-freetalk/agent.yaml",
+        snippet: `apiVersion: agenthub/v1alpha1
+format: live                     # 不建沙箱：没有 environment / mcpServers / agentOptions
+modelService: model              # live 必填：换成你项目里注册的模型服务名
+model: gemini-3.1-flash-lite     # 只跑回落的按住说话和文字点评
+
+voice:
+  realtime:                      # 实时通话：浏览器 ↔ 平台实时语音网关
+    provider: vertex-gemini-live
+    model: gemini-live-2.5-flash-native-audio
+    voice: Aoede
+    language: en-US
+  input:  { provider: modelgate, model: qwen3-asr-flash, language: en }   # 回落：按住说话
+  output: { provider: modelgate, model: qwen3-tts-flash, voice: Cherry, format: mp3 }
+
+memory:
+  enabled: false                 # 声明了 voice.realtime 就必须关`,
+        lessonTitle: "自由对话",
+        teacherName: "Ava",
+        welcomeText:
+          "点一下开始，麦克风会一直开着，你和 Ava 像打电话一样用英语聊天。聊完挂断，会给你一张带转写的点评卡。",
       },
     ],
     extensions: [

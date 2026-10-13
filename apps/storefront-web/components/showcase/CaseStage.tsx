@@ -25,6 +25,7 @@ import { WeChatApp } from "@/components/mobile/WeChatApp";
 import { ClassroomApp } from "@/components/mobile/ClassroomApp";
 import { EnglishCourseApp } from "@/components/mobile/EnglishCourseApp";
 import { RoleplayApp } from "@/components/mobile/RoleplayApp";
+import { FreeTalkApp } from "@/components/mobile/FreeTalkApp";
 import type { Lesson } from "@/lib/course/types";
 import { Footer } from "./Chrome";
 import { Code } from "./Code";
@@ -245,6 +246,8 @@ export function CaseStage({
             <EnglishCourseApp conversation={conversation} background={background} openers={surface.openers} visitorId={localProgressKey} lessonTitle={surface.lessonTitle} teacherName={surface.teacherName} welcomeText={surface.welcomeText} />
           ) : surface.app === "roleplay" ? (
             <RoleplayApp conversation={conversation} openers={surface.openers} visitorId={localProgressKey} sceneTitle={surface.lessonTitle} clerkName={surface.teacherName} welcomeText={surface.welcomeText} />
+          ) : surface.app === "freetalk" ? (
+            <FreeTalkApp conversation={conversation} openers={surface.openers} agentName={surface.teacherName} sceneTitle={surface.lessonTitle} welcomeText={surface.welcomeText} />
           ) : (
             <ShoppingApp
               conversation={conversation}

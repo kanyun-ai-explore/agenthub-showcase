@@ -6,7 +6,7 @@ test / production 槽位。
 
 ## 目录布局
 
-- `agents/<slug>/`：一个目录 = 一个 Agent（判据是它下面有 `agent.yaml`）。当前七个：
+- `agents/<slug>/`：一个目录 = 一个 Agent（判据是它下面有 `agent.yaml`）。主要的几个：
 
   | 目录 | 说明 |
   | --- | --- |
@@ -17,6 +17,7 @@ test / production 槽位。
   | `agents/edu-chinese-tutor/` | 语文课 |
   | `agents/edu-homework-qa/` | 作业批改 |
   | `agents/edu-learning-analytics/` | 学情分析 |
+  | `agents/edu-english-freetalk/` | 英语自由对话，`format: live` + 实时语音 |
 
 - `environments/`、`subagents/`：平台保留目录，本仓库没用。
 
@@ -48,6 +49,9 @@ agenthub agent check --refs --require-remote --project-id <项目 uuid>
 `cma-merchant` 的 `agent.yaml` 用了 `mcpServers[].tools[]` 这个较新的声明形态，发布出去的
 CLI 如果 schema 落后于平台契约，可能会把这个 key 报成无法识别。**这时不要靠删掉 `tools:`
 来「修复」**，升级 CLI 即可。
+
+`edu-english-freetalk` 的 `voice.realtime` 也是较新的声明形态，CLI 的 schema 落后于平台契约时
+会把它报成无法识别。**不要靠删掉这一段来「修复」**，以平台提交流水线的校验为准。
 
 ## 相关文档
 

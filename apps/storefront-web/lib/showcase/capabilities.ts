@@ -20,7 +20,8 @@ export type CapabilityId =
   | "memory"
   | "model-gate"
   | "voice-turn"
-  | "live";
+  | "live"
+  | "realtime";
 
 /** 页面真的能观察到的运行时事件。 */
 export type CapabilitySignal =
@@ -171,6 +172,14 @@ export const CAPABILITIES: Record<CapabilityId, Capability> = {
       "按住说话录一段，平台先把它转写成文字再交给 Agent，Agent 收到的和打字输入的完全一样。Agent 回复的那句话再被合成为分段音频播放出来。转写与合成都发生在回合边界内，业务侧只负责录音和播放。",
     evidence: "@kanyun-ai-infra/agenthub · sessions.sendVoiceTurn / waitForTurnAudio",
     signal: "voice-turn",
+  },
+  realtime: {
+    id: "realtime",
+    name: "实时语音通话",
+    blurb:
+      "浏览器和平台的实时语音网关建一条 WebSocket：麦克风的音频直接上去、模型的原生音频直接下来，中间没有「转写 → 文本模型 → 合成」三段，所以能一边听一边接话，也能插话打断。票由站点服务端换（一次一张、60 秒有效），在 WebSocket 的子协议里交给网关，不进 URL；线路建不起来时落回「按住说话」的语音回合，同一个会话接着聊。",
+    evidence: "@kanyun-ai-infra/agenthub/realtime · createRealtimeVoiceClient + POST /api/agenthub/voice-ticket",
+    signal: null,
   },
 };
 
