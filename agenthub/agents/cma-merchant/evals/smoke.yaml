@@ -34,6 +34,27 @@ cases:
         expect:
           calledTool: { name: mcp__merchant__present_suggestions, times: ">=1" }
 
+  - id: greeting-suggestions
+    description: >-
+      纯问候轮的组件纪律：没有别的组件时，按 CLAUDE.md 应单独补一张
+      present_suggestions（每个回合都以可点的 chips 收尾）。实测遵从率低
+      （首跑即红、多轮未见通过）——健康页上预期呈现「从未通过」状态，
+      与 stage-price-change（时红时绿）构成 flaky 与 suspect 的对照。
+    turns:
+      - user: "Hi — just checking you're up."
+    allowStdioMcp: true
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: transcript
+        label: chips-shown
+        severity: gate
+        expect:
+          calledTool: { name: mcp__merchant__present_suggestions, times: ">=1" }
+
   - id: business-briefing
     description: >-
       经营简报：CLAUDE.md 要求任何谈表现的对话先调 get_business_snapshot，数字只报
