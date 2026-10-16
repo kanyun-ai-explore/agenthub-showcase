@@ -3,25 +3,30 @@ kind: EvalSuite
 purpose: capability
 
 # 能力：Sam 店员「台词说得好不好」。smoke 断言的是硬契约（不调工具、英语、
-# 报价）；这层评的是语音对话的软质量——句子长短纪律、对孩子的友好度、角色
-# 不出戏。这些是「多表述的红线」，llm 比 regex 合适。
+# 报价）；这层评的是语音对话的软质量——句子长短纪律、对学员（B1 起点的青少年
+# 和成人）的友好度、角色不出戏。这些是「多表述的红线」，llm 比 regex 合适。
 #
-# judgeModel=qwen3-vl-flash：被测是本 agent 的 gemini-3.1-flash-lite，≠ 被测，
-# 且与被测模型不同 id。
-# （换判分模型前先小流量验证：网关对具体模型的 tool-call 翻译质量
-# 因模型而异，不能只看模型在不在目录里。）
+# judgeModel=model-glm-5.3-flashx：被测是本 agent 的 gemini-3.1-flash-lite，≠ 被测。
+# 判官取 GLM 系，与被测不同系列；7 个 capability suite 用同一个判官。GLM 三档里选 flashx：单维度耗时最短，
+# 离判官调用的 120 s 超时最远（超时不重试，该 trial 记 errored）；model-glm-5.3、model-glm-5.3-flash 都慢一倍左右。
+# 换判分模型前先小流量验证：网关对具体模型的 tool-call 翻译质量因模型而异，能稳定回 1-5 整数档再换。
+# graderVersion 3：学员从一年级孩子改成 B1 起点的青少年和成人，rubric 的「儿童友好」维度换成
+# 「学员友好」、台词纪律的词数上限 15→20、跑题题面换掉——判分尺变了，同样声明换尺。
+# graderVersion 4：判官换成 model-glm-5.3-flashx，换判官即换尺。
 #
 # 同门 agent edu-english-reader 不做 capability：它的全部契约是逐字回显，
 # 确定性 equals 断言已完整覆盖，没有语义质量面——不为凑 grader 数硬造评分。
+# judgeModelService=model：判分通道显式声明，不借用被测 agent 的模型服务。
 
 defaults:
-  judgeModel: qwen3-vl-flash
+  judgeModelService: model
+  judgeModel: model-glm-5.3-flashx
 
 cases:
   - id: order-flow-natural-voice
     description: >-
-      两轮点单（点咖啡 → 加蛋糕）：台词短、一次一问、对孩子友好——被语音合成
-      念出去听着自然。
+      两轮点单（点咖啡 → 加蛋糕）：台词短、一次一问、对 B1 学员友好——被语音
+      合成念出去听着自然。
     turns:
       - user: "I want a coffee, please."
       - user: "Hot. And a cake, please."
@@ -37,16 +42,16 @@ cases:
         label: sam-voice-quality
         severity: soft
         rubric: rubrics/sam-voice-quality.md
-        dimensions: [台词纪律, 儿童友好]
+        dimensions: [台词纪律, 学员友好]
         threshold: 0.7
-        graderVersion: 1
+        graderVersion: 4
 
   - id: off-topic-gently-refocused
     description: >-
-      孩子跑题聊奥特曼（CLAUDE.md 明文场景）：先把话接住，再用一句话带回店里，
-      不纠正、不点评、不出戏。
+      学员跑题聊昨晚的球赛（CLAUDE.md「跟咖啡店无关的事」）：先把话接住，再用
+      一句话带回店里，不纠正、不点评、不出戏。
     turns:
-      - user: "I like Ultraman! He is so cool! He can fly!"
+      - user: "I watched a football match last night. It was amazing!"
     trials: 2
     passPolicy: any
     graders:
@@ -59,6 +64,6 @@ cases:
         label: sam-voice-quality
         severity: soft
         rubric: rubrics/sam-voice-quality.md
-        dimensions: [台词纪律, 儿童友好, 角色一致]
+        dimensions: [台词纪律, 学员友好, 角色一致]
         threshold: 0.7
-        graderVersion: 1
+        graderVersion: 4

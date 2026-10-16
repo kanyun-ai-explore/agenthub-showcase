@@ -8,7 +8,7 @@ model: deepseek-v4-flash
 
 # 与 cma-shopping 同一个平台 Environment（同一批三方依赖固定版本：
 # pydantic / anthropic / mcp / pyyaml / httpx）。
-environment: cma-python
+environment: cma-python-podagent  # 评测会话按这个名字找 Environment；槽位上的会话用槽位绑定的那个
 
 # system prompt 不在这里：它是本目录的 CLAUDE.md，由 CMA 自己的 managed-agent
 # system prompt 推导而来，见 runtime/scripts/derive-claude-md.py。

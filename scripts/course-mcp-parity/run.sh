@@ -39,7 +39,9 @@ norm "${TMP}/py.json" > "${TMP}/py.norm"
 norm "${TMP}/ts.json" > "${TMP}/ts.norm"
 
 if diff -u "${TMP}/py.norm" "${TMP}/ts.norm" > "${TMP}/diff.txt"; then
-  echo "✅ course MCP 对拍一致（12 组用例）"
+  # 用例数从产物里数，不写死：写死的数字改了用例就变成一句假话
+  COUNT="$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))))' "${TMP}/py.json")"
+  echo "✅ course MCP 对拍一致（${COUNT} 组用例）"
   exit 0
 fi
 

@@ -5,7 +5,7 @@ by (see ``derive-claude-md.md`` for the original step-by-step record, and
 ``_vendor-reference/system.md`` rather than literally calling
 ``shopping_agent.prompt.build_static_system``).
 
-Three patches on top of system.md, matching CLAUDE.md's own header comment exactly:
+Four patches on top of system.md, matching CLAUDE.md's own header comment exactly:
 
 1. insert one bullet at the top of "# Presentation" — needed because this deployment's
    stdio server (``CMA_UI_DELIVERY=result_text``, D-R4 mode A) puts the full enriched
@@ -18,6 +18,11 @@ Three patches on top of system.md, matching CLAUDE.md's own header comment exact
    presentation tools take the turn's chips in a ``suggestions`` field on the last
    component (``PresentationPayload.suggestions``), so the chips no longer cost a model
    round of their own; ``present_suggestions`` stays for the turn with no component.
+4. insert one bullet after the "# Tools" two-search bullet — this deployment's
+   ``search_products`` (storefront_stdio_server/search.py) returns the matches beyond a
+   price filter, marked ``outside_price_filter``, instead of whatever was left under the
+   filter; the bullet says such a result is found, so the two-search rule (kept as is
+   for searches that come back empty) does not send the model on a second round for it.
 
 Usage::
 
@@ -90,6 +95,28 @@ def replace_chips_sentence(body: str) -> str:
     return body
 
 
+TWO_SEARCH_BULLET = (
+    "- Say that something is not carried only after two searches this turn, the second "
+    "worded more broadly and without the filter most likely to have emptied the first; an "
+    "earlier turn's results say what that query matched, nothing about what the store "
+    "lacks.\n"
+)
+OUTSIDE_PRICE_NOTE = (
+    "- A search result marked outside_price_filter was found: it matches the query and "
+    "misses only the price filter, so it needs no second search; show it with the miss "
+    "marked, as below.\n"
+)
+
+
+def insert_outside_price_note(body: str) -> str:
+    if body.count(TWO_SEARCH_BULLET) != 1:
+        raise SystemExit(
+            "system.md no longer carries the two-search bullet patch 4 follows; re-derive "
+            "patch 4 against the new upstream wording before re-vendoring."
+        )
+    return body.replace(TWO_SEARCH_BULLET, TWO_SEARCH_BULLET + OUTSIDE_PRICE_NOTE)
+
+
 def insert_presentation_note(body: str) -> str:
     anchor = "# Presentation\n\n"
     index = body.index(anchor)
@@ -106,6 +133,7 @@ def derive() -> str:
     body = strip_header_comment(SYSTEM_MD.read_text(encoding="utf-8"))
     body = insert_presentation_note(body)
     body = replace_chips_sentence(body)
+    body = insert_outside_price_note(body)
     skill_tool_adapter = extract_skill_tool_adapter(AGENT_SDK_PY)
     return append_skill_adapter(body, skill_tool_adapter)
 

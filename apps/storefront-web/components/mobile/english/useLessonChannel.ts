@@ -20,15 +20,23 @@
  * 正在等这一关时不必等整轮结束；回合终态时用权威结果收尾。
  * 流里的草稿按 toolCallId 全记：两批并行发出、一次被拒后重调，都能按批次号拼对；
  * 回合还在跑时只拼从第 1 批起连续的几批，且不算「到齐」——到齐只认回合终态。
+ *
+ * 出题回合派发完就拿回合 id（`ask` 的 `earlyTurnId`）。流里出现这一关的卡（工具收下了这次
+ * 调用，平台那一轮里读得到它）、而且卡里的首句就是屏幕上那一句时，把出处 `{ sessionId, turnId }` 先记到
+ * 这一关上：页面据此在回合还在跑时就取首句的读音，不等终态（`lib/course/course-audio.ts` 的 `prefetchClips`）。
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Conversation } from "@/components/agent/useAgentConversation";
 import type { VoiceTake } from "@/lib/agenthub/voice-recording";
+import { requestReaderPrewarm } from "@/lib/course/course-audio";
 import {
   lessonFromCards,
   liveLessonCards,
+  liveLessonOrigin,
   meetsVoiceRequirement,
+  mergeLiveLesson,
+  pickLiveLesson,
   reviewText,
   settleLessonContent,
   stampLesson,
@@ -37,12 +45,14 @@ import {
 import {
   abandonsBackground,
   demote,
+  demoteBackground,
   drainQueue,
   dropVoice,
   isStale,
   laneOf,
   promote,
   takeNext,
+  type BackgroundStage,
   type Lane,
   type QueuedJob,
 } from "@/lib/course/turn-queue";
@@ -107,20 +117,44 @@ function mark(name: string, detail: string) {
 }
 
 /**
- * `background`：英语小课的第二个 coach 会话，专跑单元 3 的后台出题。
- * 两条道：出题走 `background`，讲解、跟读、单元点评走主会话，互不排队（`laneOf`）。第二个会话等第一件
- * 出题活来了才建（懒建）；它建不起来或者中途变成 error / unconfigured，就记下「不可用」，排着的和以后的
- * 出题活全部回落到主会话，和改之前一样排队——页面照常可用。不传 `background` 就是单会话。
+ * `background`：专跑单元 3 后台出题的第二个会话。站点配了出题专用的 agent
+ * （edu-english-lesson-gen）时建在它上面，没配时是第二个 coach 会话。两条道：出题走后台道，讲解、跟读、
+ * 单元点评走主会话，互不排队（`laneOf`）。后台道上的会话等第一件出题活来了才建（懒建）。
+ *
+ * `backgroundFallback`：后台道的兜底，第二个 coach 会话。只有 `background` 是出题 agent 时才传。
+ *
+ * 后台道上的会话建不起来（error / unconfigured）或者出题回合没跑完（失败、等终态超时），就往下退一级
+ * （`demoteBackground`）：出题 agent → 兜底的 coach 会话 → 主会话。退到主会话以后，排着的和以后的出题活都在主会话排队，
+ * 和改之前一样——页面照常可用。不传 `background` 就是单会话。
+ * 一关只认一个来源：没跑完的那一轮已经流出、页面已经收下了这一关的题，就用它收尾，下一级只接还没收下任何题的关。
  */
-export function useLessonChannel(conversation: Conversation, background: Conversation | null = null) {
+export function useLessonChannel(
+  conversation: Conversation,
+  background: Conversation | null = null,
+  backgroundFallback: Conversation | null = null,
+) {
   const conversationRef = useRef(conversation);
   conversationRef.current = conversation;
   const backgroundRef = useRef(background);
   backgroundRef.current = background;
-  /** 第二个会话不可用了（建不起来、中途出错）：出题活回落到主会话。 */
-  const backgroundFailedRef = useRef(false);
-  const backgroundUsable = () => Boolean(backgroundRef.current) && !backgroundFailedRef.current;
-  const conversationOf = (lane: Lane): Conversation | null => (lane === "main" ? conversationRef.current : backgroundRef.current);
+  const fallbackRef = useRef(backgroundFallback);
+  fallbackRef.current = backgroundFallback;
+  /** 后台道退到哪一级了（`BackgroundStage`）。ref 给回调用，state 让页面跟着重画流式内容。 */
+  const backgroundStageRef = useRef<BackgroundStage>(0);
+  const [backgroundStage, setBackgroundStage] = useState<BackgroundStage>(0);
+  const backgroundAt = (stage: BackgroundStage): Conversation | null =>
+    stage === 0 ? backgroundRef.current : stage === 1 ? fallbackRef.current : null;
+  const backgroundUsable = () => Boolean(backgroundAt(backgroundStageRef.current));
+  const conversationOf = (lane: Lane): Conversation | null =>
+    lane === "main" ? conversationRef.current : backgroundAt(backgroundStageRef.current);
+  /** 后台道上现在这个会话坏了：退一级。退到兜底以后，排着的出题活由兜底的会话懒建后接着跑。 */
+  const demoteBackgroundLane = (why: string) => {
+    const from = backgroundStageRef.current;
+    const next = demoteBackground(from, Boolean(fallbackRef.current));
+    backgroundStageRef.current = next;
+    setBackgroundStage(next);
+    mark("bg-fallback", `后台道第 ${from} 级不可用（${why}），${next === 1 ? "出题改走兜底的 coach 会话" : "出题回到主会话"}`);
+  };
 
   const queueRef = useRef<Job[]>([]);
   const runningRef = useRef<Record<Lane, Job | null>>({ main: null, background: null });
@@ -214,17 +248,40 @@ export function useLessonChannel(conversation: Conversation, background: Convers
       runStartedRef.current[lane] = startedAt;
       switch (job.kind) {
         case "lesson": {
-          const outcome = await conversation.ask(job.compose(job.lessonId));
+          // 这一关的读音要用的朗读会话，趁出题这几十秒先让站点建好。按这条道的 coach 会话报：
+          // 回合终态时记下的 `origin.sessionId`（取音时站点按它找朗读会话）就是它。不等、失败不管。
+          if (conversation.sessionId) {
+            void requestReaderPrewarm(conversation.sessionId).then((status) =>
+              mark("reader-prewarm", `${job.levelId} HTTP ${status} ${Date.now() - startedAt}ms`),
+            );
+          }
+          const outcome = await conversation.ask(job.compose(job.lessonId), { earlyTurnId: true });
           if (outcome.code === "SESSION_REVIVING" || outcome.code === "SESSION_REBUILDING") {
             // 会话被回收、正在恢复，或者归属 cookie 没了、正在换新会话：这件事原样放回队首，会话好了再出。
             queueRef.current = [{ ...job, urgent: true, urgentAt: 0 }, ...queueRef.current];
             sync();
             return;
           }
+          const origin =
+            conversation.sessionId && outcome.turnId ? { sessionId: conversation.sessionId, turnId: outcome.turnId } : undefined;
           if (abandonsBackground(lane, outcome)) {
-            // 第二个会话就绪以后回合跑不完：记成不可用，这件活原样改走主会话（不算一次重出），以后的出题也都走主会话。
-            backgroundFailedRef.current = true;
-            mark("bg-fallback", `第二个会话上的出题回合没跑完（${outcome.code ?? outcome.status ?? "未知"}），出题回到主会话`);
+            // 后台道上的回合跑不完（失败、等终态超时）：这个会话记成不可用、退一级，以后的出题都走下一级
+            // （先退到兜底的 coach 会话，再退才是主会话）。
+            demoteBackgroundLane(`出题回合没跑完：${outcome.code ?? outcome.status ?? "未知"}`);
+            // 这一关已经收下了这一轮流出的题（槽位里是这个编号）：一关只认一个来源，用手上的收尾，不交给下一级重出——
+            // 下一级出的另一版用同一个编号，会把已经打开的这一关换成一半一半。
+            // 终态带回了卡就按卡收尾（同一轮的权威结果）；没带（等终态超时）就留着流里那一版和它已经核过的出处。
+            const shown = lessonsRef.current[job.levelId];
+            if (shown?.status === "ready" && shown.content.lessonId === job.lessonId) {
+              const cards = outcome.cards ?? [];
+              settleLesson(job.levelId, job.lessonId, cards, startedAt, {
+                error: outcome.error ?? outcome.code,
+                final: true,
+                origin: cards.length > 0 ? origin : undefined,
+              });
+              return;
+            }
+            // 这一关还没收下任何题：这件活原样改走下一级（不算一次重出）。
             queueRef.current = [...queueRef.current, job];
             sync();
             return;
@@ -233,8 +290,7 @@ export function useLessonChannel(conversation: Conversation, background: Convers
           const ok = settleLesson(job.levelId, job.lessonId, outcome.cards ?? [], startedAt, {
             error: outcome.error ?? outcome.code,
             final,
-            origin:
-              conversation.sessionId && outcome.turnId ? { sessionId: conversation.sessionId, turnId: outcome.turnId } : undefined,
+            origin,
           });
           // 没出成或缺听音 / 跟读：换个编号再出一次，紧急程度照旧。
           if (!ok && !final) enqueueLesson(job.levelId, job.urgent, job.compose, job.attempt + 1);
@@ -334,27 +390,30 @@ export function useLessonChannel(conversation: Conversation, background: Convers
   }, [run]);
   pumpRef.current = pump;
 
-  // 会话就绪（或者恢复好了）就开始跑排着的活；两个会话各看各的。
+  /** 后台道上现在用的那个会话（退到主会话以后是 null）。 */
+  const activeBackground = backgroundStage === 0 ? background : backgroundStage === 1 ? backgroundFallback : null;
+
+  // 会话就绪（或者恢复好了）就开始跑排着的活；两条道各看各的。
   useEffect(() => {
     if (conversation.phase === "ready") pump();
   }, [conversation.phase, pump]);
   useEffect(() => {
-    if (background?.phase !== "ready") return;
-    // 第二个会话从建到就绪多久（预热池里没有它的位置时是冷启动）。
-    mark("bg-ready", `${background.elapsed}s ${background.sessionId ?? ""}`);
+    if (activeBackground?.phase !== "ready") return;
+    // 后台道的会话从建到就绪多久（出题 agent 没有预热池，是冷启动）。
+    mark("bg-ready", `第 ${backgroundStage} 级 ${activeBackground.elapsed}s ${activeBackground.sessionId ?? ""}`);
     pump();
-  }, [background?.phase, pump]);
+  }, [activeBackground?.phase, backgroundStage, pump]);
 
-  // 第二个会话建不起来（error / unconfigured）：记成不可用，出题活回落到主会话。
+  // 后台道的会话建不起来（error / unconfigured）：退一级——有兜底退到兜底的 coach 会话，没有就回落主会话。
   useEffect(() => {
-    if (!background || backgroundFailedRef.current) return;
-    if (background.phase !== "error" && background.phase !== "unconfigured") return;
-    backgroundFailedRef.current = true;
-    // 出题活改走主会话那条道：同步一下队列，主会话要是也已经死了，收尾的 effect 会把它们收掉。
+    // 这一次渲染看到的级别已经过时（刚退过一级、还没重画）：不再退。
+    if (!activeBackground || backgroundStageRef.current !== backgroundStage) return;
+    if (activeBackground.phase !== "error" && activeBackground.phase !== "unconfigured") return;
+    demoteBackgroundLane(`${activeBackground.phase}${activeBackground.error ? `：${activeBackground.error}` : ""}`);
+    // 出题活改走下一级：同步一下队列，退到兜底就由它懒建；主会话要是也已经死了，收尾的 effect 会把它们收掉。
     sync();
-    mark("bg-fallback", `第二个会话不可用（${background.phase}${background.error ? `：${background.error}` : ""}），出题回到主会话`);
     pumpRef.current();
-  }, [background, background?.phase]);
+  }, [activeBackground, activeBackground?.phase, backgroundStage]);
 
   // 会话最后没起来：排着的活不会再跑了，逐件收尾（跟读给出错误、讲解和点评标失败、出题标没出成），
   // 不让页面一直停在「排队中」。
@@ -518,8 +577,8 @@ export function useLessonChannel(conversation: Conversation, background: Convers
   };
   const pending = useMemo(() => (running ? streamingOf(conversation.messages) : null), [conversation.messages, running]);
   const pendingBackground = useMemo(
-    () => (runningBackground ? streamingOf(background?.messages) : null),
-    [background?.messages, runningBackground],
+    () => (runningBackground ? streamingOf(activeBackground?.messages) : null),
+    [activeBackground?.messages, runningBackground],
   );
   /** 正在出题的那一件（在哪条道上都行）和它的流。 */
   const lessonRun = useMemo(() => {
@@ -540,14 +599,20 @@ export function useLessonChannel(conversation: Conversation, background: Convers
     if (!found || !meetsVoiceRequirement(found)) return;
     const content = stampLesson(found, lessonId);
     const before = lessonsRef.current[levelId];
-    const sameLesson = before?.status === "ready" && before.content.lessonId === lessonId;
-    // 同一关只增不减（草稿画出的题已经交给播放器了）。
-    if (sameLesson && before.content.exercises.length >= content.exercises.length) return;
-    const readyMs = sameLesson ? before.readyMs : Date.now() - runStartedRef.current[lane];
-    if (!sameLesson) {
+    const shown = before?.status === "ready" && before.content.lessonId === lessonId ? before : null;
+    // 同一关只增不减（草稿画出的题已经交给播放器了）；这一关的出处到了就补上（回合 id 派发完就有，
+    // 等流里的卡和屏幕上的首句对上了再记）。规则在 `pickLiveLesson` / `liveLessonOrigin` / `mergeLiveLesson`。
+    const base = shown?.content ?? null;
+    const origin = liveLessonOrigin(conversationOf(lane)?.sessionId, pending.turnId, pending.cards, pickLiveLesson(base, content));
+    const next = mergeLiveLesson(base, content, origin);
+    if (!next) return;
+    const sinceDispatch = Date.now() - runStartedRef.current[lane];
+    const readyMs = shown ? shown.readyMs : sinceDispatch;
+    if (!shown) {
       mark("w1-first-batch", `${levelId} ${readyMs}ms ${content.exercises.length} 题${content.complete ? "（整关）" : "（后面还有）"}`);
     }
-    setLessons((prev) => ({ ...prev, [levelId]: { status: "ready", content, readyMs } }));
+    if (next.origin && !shown?.content.origin) mark("w1-early-origin", `${levelId} ${sinceDispatch}ms`);
+    setLessons((prev) => ({ ...prev, [levelId]: { status: "ready", content: next, readyMs } }));
   }, [lessonRun]);
 
   // 结算点评流进来时只显示调工具之前那一段：流里的正文是各段直接接起来的，工具之后补的话

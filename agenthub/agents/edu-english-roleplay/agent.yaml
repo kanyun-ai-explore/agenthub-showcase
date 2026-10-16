@@ -22,15 +22,14 @@ format: live
 # model 不跟服务默认的 deepseek-v4-flash：它经模型网关每回合都先推理（显式
 # `thinking: disabled` 也被忽略），live 上首正文前多出 p50 约 3 s。gemini-3.1-flash-lite
 # 在同样的请求形状下 0/5 推理、首正文 p50 约 0.9 s（直连探针实测）。
-# qwen3-vl-flash 更快，但守不住 CLAUDE.md 里「孩子说不舒服要建议告诉家长或老师」那条（0/4），
+# qwen3-vl-flash 更快，但守不住当时（一年级版）CLAUDE.md 里「说不舒服要建议告诉家长或老师」那条（0/4），
 # 所以没选它。这里的 model 不需要在服务的档位里登记，服务的密钥有权调用它就行。
 modelService: model
 model: gemini-3.1-flash-lite
 
 # 语音：input 是「派发前同步转写」——学员按住说话录的一段音，平台先转成文字再作为这一轮
 # 的 user.text 交给 agent（它收到的和打字进来的一模一样）；output 是「回合终态后合成」——
-# agent 回的那句话被合成分段音频，页面播给学员听。声明了 voice 的 agent 必须走模型网关上的
-# 模型服务，这里用的就是上面的 `model`。
+# agent 回的那句话被合成分段音频，页面播给学员听。
 #
 # 转写和合成都用 qwen（之前是 azure；店员开口是这个视角的核心，output 保留）。
 # - `format` 在平台契约里只能填 `mp3`，但 qwen3-tts-flash 不认 mp3，不管请求什么格式都回
@@ -38,13 +37,20 @@ model: gemini-3.1-flash-lite
 #   页面直接把段的签名 URL 交给 `<audio>`，靠浏览器按内容识别：同形 WAV 标 audio/mpeg 在
 #   chromium 148 / webkit 26.4 都能播完、`ended` 照常触发（本地实测）。
 # - input 的 `language: en` qwen3-asr-flash 收（直调模型网关实测）。
+#
+# 转写和合成走阿里云百炼，模型名、音色不变：两段都是 `provider: dashscope`，`modelService: bailian`
+# 是项目里登记的百炼模型服务（主机 dashscope.aliyuncs.com），⚠️ 换成你项目里注册的那个。平台在创建
+# 会话时按 provider 校验服务主机，哪一段不写 `modelService` 就落到上面的 `model`（模型网关），校验不过，
+# 所以两段都写。百炼回的也是 WAV，上面那条照旧成立；`language: en` 由平台放进百炼请求的 `asr_options.language`。
 voice:
   input:
-    provider: modelgate
+    provider: dashscope
+    modelService: bailian
     model: qwen3-asr-flash
     language: en
   output:
-    provider: modelgate
+    provider: dashscope
+    modelService: bailian
     model: qwen3-tts-flash
     voice: Cherry
     format: mp3

@@ -3,11 +3,19 @@ kind: EvalSuite
 purpose: capability
 
 # 能力：乐乐老师「教得好不好」。与 math-tutor 的 capability 同构（rubric 维度
-# 一致、场景换成拼音教学），judge 用 qwen3-vl-flash——同 `model` 服务、
-# edu-english-reader 生产实证可用，且 ≠ 被测 deepseek-v4-flash；跨厂商判分
-# （deepseek 生成、qwen 评分）。
+# 一致、场景换成拼音教学）。
+#
+# judgeModel=model-glm-5.3-flashx：≠ 被测 deepseek-v4-flash。
+# 判官取 GLM 系，与被测不同系列；7 个 capability suite 用同一个判官。GLM 三档里选 flashx：单维度耗时最短，
+# 离判官调用的 120 s 超时最远（超时不重试，该 trial 记 errored）；model-glm-5.3、model-glm-5.3-flash 都慢一倍左右。
+# 换判分模型前先小流量验证：网关对具体模型的 tool-call 翻译质量因模型而异，能稳定回 1-5 整数档再换。
+# graderVersion 3：换了 judge，打分刻度跟着变——按平台的换尺机制主动声明，基线换新桶，
+# 趋势页会在换尺那一点自动加注解。
+# judgeModelService=model：判分通道显式声明，不借用被测 agent 的模型服务。
+
 defaults:
-  judgeModel: qwen3-vl-flash
+  judgeModelService: model
+  judgeModel: model-glm-5.3-flashx
 
 cases:
   - id: teach-consonant-clearly
@@ -28,7 +36,7 @@ cases:
         rubric: rubrics/teaching-quality.md
         dimensions: [语言适龄, 一次只讲一个知识点]
         threshold: 0.7
-        graderVersion: 1
+        graderVersion: 3
 
   - id: wrong-syllable-gently-guided
     description: >-
@@ -50,4 +58,4 @@ cases:
         rubric: rubrics/teaching-quality.md
         dimensions: [语言适龄, 引导而非灌输]
         threshold: 0.7
-        graderVersion: 1
+        graderVersion: 3

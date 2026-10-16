@@ -9,7 +9,7 @@ model: deepseek-v4-flash
 
 # 平台 Environment，把 CMA 的三方依赖固定版本烤进镜像
 # （pydantic / anthropic / mcp / pyyaml / httpx，版本见 README）。
-environment: cma-python
+environment: cma-python-podagent  # 评测会话按这个名字找 Environment；槽位上的会话用槽位绑定的那个
 
 # system prompt 不在这里：它是本目录的 CLAUDE.md，由 CMA 自己的 managed-agent
 # system prompt 推导而来，推导步骤见 runtime/scripts/derive-claude-md.md。
@@ -17,7 +17,7 @@ environment: cma-python
 # 没有 setupScriptFile。平台在沙箱**启动期**跑 setup 脚本，早于第一轮对话时才解压的
 # agent 包——所以 setup 脚本没法 pip install 本包自带的 vendored 代码（实测：每个
 # 会话都 SETUP_SCRIPT_FAILED，报 runtime/src/commerce-common 不存在）。
-# 三方依赖烤进 cma-python Environment，vendored 包改用下面 env 里的 PYTHONPATH
+# 三方依赖烤进 cma-python-podagent Environment，vendored 包改用下面 env 里的 PYTHONPATH
 # 直接可导入。scripts/setup.sh 只留给本地 `agenthub agent dev` 用。
 
 # serverKey 由 MCP 的 displayName slugify 而来，所以这个渲染成 `mcp__storefront__*`，

@@ -43,7 +43,7 @@ agent 参考着推进，不照搬。
 
 ## 本地验证
 
-`mcp` 包不在仓库依赖里（它由平台 Environment `cma-python` 预装），本地验纯逻辑用打桩：
+`mcp` 包不在仓库依赖里（沙箱里由平台的 Environment 预装），本地验纯逻辑用打桩：
 
 ```python
 import sys, types

@@ -7,14 +7,19 @@
  * （`lib/agenthub/turn-wait.ts`，N = 20 s）。
  *
  * 一轮的请求数：1 次 POST + k 次 turn-result。每次请求在服务端约等 W ≈ 14 s（N 减去两段余量，见
- * `turn-wait.ts`），回合 t 秒到终态时 k ≈ ⌈(t − W) / W⌉（t ≤ W 时 k = 0）；例：70 s 的回合 = 1 + 4 次
- * （`scripts/turn-short-poll/check.mjs` 的 ceiling-70s 读数）。上限两条，先到先停：从派发算满
+ * `turn-wait.ts`），回合 t 秒到终态时 k ≈ ⌈(t − W) / W⌉（t ≤ W 时 k = 0）；例：70 s 的回合 = 1 + 4 次。
+ * 上限两条，先到先停：从派发算满
  * `TURN_RESULT_MAX_WAIT_MS`（总时长 ≤ 它 + N），或 turn-result 读满 `TURN_RESULT_MAX_READS` 次（防一直
  * 秒回 pending 的空转）。turn-result 只读、幂等：一次读遇到网络错误或 5xx，隔 `READ_RETRY_DELAY_MS` 重读一次
  * 再判失败（一轮要读好几次，抖一下不该丢掉整轮）。重读也算一次读。POST 不重试（会重复派发）。
  *
- * 纯逻辑：请求和时钟由调用方注入（页面接 `fetch` + `Date.now`，`scripts/turn-short-poll/check.mjs`
- * 接路由处理函数 + 假时钟）。
+ * 回合行还不可见时 turn-result 回的是 `pending` + `notFound`：照样接着问，
+ * 但只宽限到派发后 `TURN_NOT_FOUND_GRACE_MS`，过了还不可见就收成失败 `TURN_NOT_FOUND`。
+ *
+ * 出题回合派发时带 `wait: false`：POST 派发完立刻回 `pending + turnId`，页面在回合还在跑时就
+ * 知道这一轮的 id（`onDispatched`），余下的照旧从 turn-result 取。这种回合一轮是 1 次 POST + k + 1 次读。
+ *
+ * 纯逻辑：请求和时钟由调用方注入（页面接 `fetch` + `Date.now`，测试可以接路由处理函数 + 假时钟）。
  */
 
 import type { Message, TraceItem } from "@/components/agent/useAgentConversation";
@@ -27,6 +32,12 @@ export const TURN_RESULT_MAX_WAIT_MS = 200_000;
 export const TURN_RESULT_MAX_READS = 15;
 /** 一次读失败（网络错误 / 5xx）后隔多久重读。 */
 export const READ_RETRY_DELAY_MS = 1_000;
+/**
+ * 回合行不可见（turn-result 回 `pending` + `notFound`）最多宽限到派发后多久。和 SDK 把头 30 s 的
+ * `TURN_NOT_FOUND` 当「还没投影出来」同数。一次读约挂 14 s，
+ * 所以真不存在的回合在第 3 次读回来时（约 42 s）收成失败，不会 pending 到 200 s 的总上限。
+ */
+export const TURN_NOT_FOUND_GRACE_MS = 30_000;
 
 /**
  * 站点的归属校验没过（404，见 `lib/agenthub/session-binding.ts`）：这个浏览器手里已经没有这个会话的
@@ -41,7 +52,11 @@ export interface TurnResult {
   transcript?: string;
   replyText?: string;
   cards?: TurnCard[];
-  toolCalls?: { id: string; name: string; shortName: string; failed: boolean }[];
+  toolCalls?: { id: string; name: string; shortName: string; input?: unknown; failed: boolean }[];
+  /** 这一回合的记忆召回状态（平台回合对象的 `memoryRecall.state`）。 */
+  memoryRecall?: string | null;
+  /** 只在 turn-result 的 `pending` 上出现：平台说这一轮的回合行还不可见（`TURN_NOT_FOUND`）。 */
+  notFound?: boolean;
   error?: string;
   detail?: string;
 }
@@ -66,6 +81,7 @@ const sleepMs = (ms: number) => new Promise<void>((resolve) => setTimeout(resolv
 /**
  * 问 turn-result 直到不是 `pending`。非 2xx 收成 `failed`（`error` = 平台/站点的错误码）；到上限收成
  * `failed` + `SESSION_TURN_WAIT_TIMEOUT`。网络错误或 5xx 先重读一次；重读还是网络错误就照原样抛给调用方。
+ * 回合行不可见的 `pending`（`notFound`）过了 `TURN_NOT_FOUND_GRACE_MS` 收成 `failed` + `TURN_NOT_FOUND`。
  */
 export async function pollTurnResult(
   deps: { read: () => Promise<JsonReply>; now: () => number; sleep?: (ms: number) => Promise<void> },
@@ -96,6 +112,9 @@ export async function pollTurnResult(
       return { result: { ...body, status: "failed", error: body.error ?? `HTTP_${httpStatus}` }, reads };
     }
     if (body.status !== "pending") return { result: body, reads };
+    if (body.notFound && deps.now() - startedAt >= TURN_NOT_FOUND_GRACE_MS) {
+      return { result: { status: "failed", error: "TURN_NOT_FOUND" }, reads };
+    }
   }
   return { result: { status: "failed", error: "SESSION_TURN_WAIT_TIMEOUT" }, reads };
 }
@@ -111,9 +130,17 @@ export type TextTurnStep =
    */
   | { kind: "settled"; posted: boolean; turnId?: string; result: TurnResult; requests: number };
 
-/** 一轮文字回合：POST 派发（最多挂 N 秒），没到终态就接着轮询 turn-result。 */
+/**
+ * 一轮文字回合：POST 派发（最多挂 N 秒；带了 `wait: false` 的派发完就回），没到终态就接着轮询 turn-result。
+ * `onDispatched`：POST 回了 `pending`、回合还在跑的那一刻报出这一轮的 id（终态时它在返回值里）。
+ */
 export async function runTextTurn(
-  deps: { post: () => Promise<JsonReply>; read: (turnId: string) => Promise<JsonReply>; now: () => number },
+  deps: {
+    post: () => Promise<JsonReply>;
+    read: (turnId: string) => Promise<JsonReply>;
+    now: () => number;
+    onDispatched?: (turnId: string) => void;
+  },
   limits: Omit<PollLimits, "startedAt"> = {},
 ): Promise<TextTurnStep> {
   const startedAt = deps.now();
@@ -125,6 +152,7 @@ export async function runTextTurn(
   }
   const turnId = body.turnId;
   if (body.status !== "pending" || !turnId) return { kind: "settled", posted: true, turnId, result: body, requests: 1 };
+  deps.onDispatched?.(turnId);
   const polled = await pollTurnResult({ read: () => deps.read(turnId), now: deps.now }, { ...limits, startedAt });
   return { kind: "settled", posted: true, turnId, result: polled.result, requests: 1 + polled.reads };
 }
@@ -152,5 +180,7 @@ export function settledAgentMessage(m: AgentMessage, result: TurnResult, turnId?
     streaming: false,
     failed: result.status !== "completed",
     ...(turnId ? { turnId } : {}),
+    ...(result.toolCalls ? { toolCalls: result.toolCalls } : {}),
+    ...(result.memoryRecall !== undefined ? { memoryRecall: result.memoryRecall } : {}),
   };
 }

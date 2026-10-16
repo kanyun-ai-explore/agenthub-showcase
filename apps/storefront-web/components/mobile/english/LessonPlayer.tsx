@@ -43,8 +43,10 @@ import {
   truncate,
   type PlayerState,
 } from "@/lib/course/lesson-player";
+import { lessonClips } from "@/lib/course/course-audio";
 import { compareReading } from "@/lib/course/read-aloud";
 import { sfx } from "@/lib/course/sfx";
+import { VOICE_DEGRADED, VOICE_NOTICE } from "@/lib/showcase/voice-status";
 import { Octo } from "../Octo";
 import { ReadAloudCard } from "../ReadAloudCard";
 import { IconCheck, IconClose, IconFlame, IconSpeaker } from "./EnIcons";
@@ -248,6 +250,13 @@ export function LessonPlayer({
         <div className="en-focus">
           <b>本关重点</b>
           {content.focus}
+        </div>
+      ) : null}
+
+      {/* 跟读题的转写、运行时合成的读音（单元 3）走平台语音；预生成的读音不走，不挂。 */}
+      {VOICE_DEGRADED && (exercise.type === "read_aloud" || lessonClips(content).some((clip) => clip.kind === "runtime")) ? (
+        <div className="en-voice-down" role="status">
+          {VOICE_NOTICE}
         </div>
       ) : null}
 

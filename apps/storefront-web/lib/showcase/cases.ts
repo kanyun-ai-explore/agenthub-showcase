@@ -10,6 +10,7 @@
 
 import type { AgentKey } from "@/lib/agenthub/client";
 import type { Capability, CapabilityId } from "./capabilities";
+import type { AgentRef, Step } from "./links";
 
 export interface CaseExtension {
   title: string;
@@ -17,7 +18,7 @@ export interface CaseExtension {
 }
 
 /** 手机里放哪块界面。 */
-export type SurfaceApp = "shopping" | "merchant" | "wechat" | "classroom" | "english" | "roleplay";
+export type SurfaceApp = "shopping" | "merchant" | "wechat" | "classroom" | "english" | "roleplay" | "freetalk" | "team-chat";
 
 export interface Surface {
   id: string;
@@ -37,7 +38,18 @@ export interface Surface {
   /** 预置示例问题。渲染成页面文案，绝不做成 agent 输出的样子。 */
   openers: string[];
   agentFile: string;
+  /**
+   * 这一页还用到哪些 agent（`agenthub/agents/<dir>`），页尾「从这里开始」跟在主 agent（`agentFile` 所在目录）后面，
+   * 按 `role` 各列一份定义和目录。只用一个 agent 的视角不填。
+   */
+  extraAgents?: AgentRef[];
   snippet: string;
+  /**
+   * 「实现方式」一节的步骤，整段覆盖全站的 `GETTING_STARTED`（`lib/showcase/links.ts`）。
+   * 不给就照旧。全站那三步写的是 MCP、Agent 文件、sessions.create 的文本会话；不走那条链路的
+   * 视角（freetalk 走实时语音：不挂 MCP、不建沙箱）照抄就成了错引，所以整段换成自己的。
+   */
+  steps?: Step[];
   /** 本会话 ready 后，页面为同一访客预建这些 agent 的会话，验证跨 agent 切换。 */
   prewarm?: AgentKey[];
   /** 上课界面顶部显示的课名；缺省回落 lesson?.title，再缺省「数学课」。 */
@@ -98,7 +110,7 @@ export const SCENARIOS: Scenario[] = [
         snippet: `apiVersion: agenthub/v1alpha1
 format: claude_code
 model: deepseek-v4-flash
-environment: cma-python          # 依赖预装在平台 Environment 里
+environment: cma-python-podagent  # 依赖预装在平台 Environment 里
 
 mcpServers:
   - vcrd_…                       # 商城 MCP：检索/订单/购物车/展示
@@ -237,8 +249,8 @@ memory:
             evidence: "present_slide({ title, body, visual, kind }) / present_exercise({ prompt, options, answer_index })",
           },
           memory: {
-            blurb: "孩子在哪个知识点上反复卡住会被记住，下次上课直接从那里切入。",
-            evidence: "save_memory / recall_memories",
+            blurb: "这个视角用平台记忆，通道是开的，但这个 agent 没有随发布冻结的记忆文档，平台的自动提炼默认关闭，所以跨课次的召回通常是空的；孩子在哪儿卡住不会自动攒成记忆。",
+            evidence: "agenthub/agents/edu-math-tutor/agent.yaml",
           },
         },
         openers: ["开始上课", "9 + 4 为什么等于 13？", "我还是不懂为什么要拆开"],
@@ -279,8 +291,8 @@ mcpServers:
             evidence: "present_slide({ title, body, visual, kind }) / present_exercise({ prompt, options, answer_index })",
           },
           memory: {
-            blurb: "孩子在哪个知识点上反复卡住会被记住，下次上课直接从那里切入。",
-            evidence: "save_memory / recall_memories",
+            blurb: "这个视角用平台记忆，通道是开的，但这个 agent 没有随发布冻结的记忆文档，平台的自动提炼默认关闭，所以跨课次的召回通常是空的；孩子在哪儿卡住不会自动攒成记忆。",
+            evidence: "agenthub/agents/edu-chinese-tutor/agent.yaml",
           },
         },
         openers: ["开始上课", "b 和 p 怎么分", "妈 字怎么读"],
@@ -313,6 +325,7 @@ mcpServers:
         capabilities: ["file-agent", "sandbox", "mcp", "generative-ui", "session-turn", "stream", "config-values", "memory"],
         capabilityOverrides: {
           "file-agent": { evidence: "agenthub/agents/edu-homework-qa/agent.yaml + CLAUDE.md" },
+          sandbox: { evidence: "environment: platform-default（平台共享环境，底座预装 pydantic / mcp / httpx）" },
           mcp: { evidence: "present_correction / get_student_progress" },
           "generative-ui": { evidence: "present_correction" },
           memory: {
@@ -393,7 +406,7 @@ agentOptions:
         persona: "青少年和成人",
         tagline: "读音由平台合成，跟读由平台转写成文字",
         intro:
-          "这个视角展示文字和语音互转。文字转语音：听音题的读音和跟读题的例句都由平台合成。合成用的是一个只做原样复述的朗读 Agent（edu-english-reader，format: live，只声明 voice.output，qwen3-tts-flash）：一句英文发给它，它原样回这一句，平台把回复合成成语音。单元 1、2 的读音由平台预生成、存成静态文件，打开就能播；单元 3 的读音在课中由站点经这个 Agent 运行时合成，回合正文和原文逐字相等才用。两边都取不到时退到浏览器本机语音，题上会标明。语音转文字：跟读题按住读一句，松手后页面先量一下音量，几乎无声的一段不发送，也不占每分钟 10 次的额度，只提示「没听到声音，按住再读一次」；有声音才走平台的语音回合，平台先用 qwen3-asr-flash 把录音转写成文字，页面立刻逐词比对（读对绿、读错红、漏读灰），Agent 的文字点评要点「看点评」才显示。跟读不打发音分（转写会顺手纠错，结果偏乐观）。课程是闯关式的：三个单元各五关，难度从 CEFR B1 起点开始，面向青少年和成人，讲解用中文；点一关进去是一屏一题。选、拼、检查、继续都在页面本地完成，判定条和音效当场出来，不等模型。单元 1、2 的题是写死的，所有人一样，点开就能答。单元 3 在上课过程中生成：你每做完单元 1 或 2 的一关，页面就在后台把到这一刻为止的错题发给 Agent，它调 present_lesson 出单元 3 的一关，专门练你错过的点；单元 2 做完单元 3 才解锁，到那时题一般已经出好。Agent 另外只在三处出场：答错后点「为什么」才显示它的讲解，跟读后的一句文字点评，一个单元做完时的一句单元点评。单元 3 的出题跑在第二个会话上，讲解、跟读、单元点评在主会话上，两边互不排队；第二个会话建不起来时，全部回到主会话排一个队。通关、XP、连胜、错题和单元 3 的题只写在这台设备的浏览器里，这个视角的定位是能力的 showcase，不是完整应用。",
+          "这个视角展示文字和语音互转。文字转语音：听音题的读音和跟读题的例句都由平台合成。合成用的是一个只做原样复述的朗读 Agent（edu-english-reader，format: live，只声明 voice.output，qwen3-tts-flash）：一句英文发给它，它原样回这一句，平台把回复合成成语音。单元 1、2 的读音由平台预生成、存成静态文件，打开就能播；单元 3 的读音在课中由站点经这个 Agent 运行时合成，回合正文和原文逐字相等才用。两边都取不到时退到浏览器本机语音，题上会标明。语音转文字：跟读题按住读一句，松手后页面先量一下音量，几乎无声的一段不发送，也不占每分钟 10 次的额度，只提示「没听到声音，按住再读一次」；有声音才走平台的语音回合，平台先用 qwen3-asr-flash 把录音转写成文字，页面立刻逐词比对（读对绿、读错红、漏读灰），Agent 的文字点评要点「看点评」才显示。跟读不打发音分（转写会顺手纠错，结果偏乐观）。课程是闯关式的：三个单元各五关，难度从 CEFR B1 起点开始，面向青少年和成人，讲解用中文；点一关进去是一屏一题。选、拼、检查、继续都在页面本地完成，判定条和音效当场出来，不等模型。单元 1、2 的题是写死的，所有人一样，点开就能答。单元 3 在上课过程中生成：你每做完单元 1 或 2 的一关，页面就在后台把到这一刻为止的错题发给 Agent，它调 present_lesson 出单元 3 的一关，专门练你错过的点；单元 2 做完单元 3 才解锁，到那时题一般已经出好。Agent 另外只在三处出场：答错后点「为什么」才显示它的讲解，跟读后的一句文字点评，一个单元做完时的一句单元点评。单元 3 的出题跑在第二个会话上，讲解、跟读、单元点评在主会话上，两边互不排队。站点配了只出题的 Agent（edu-english-lesson-gen）时，第二个会话建在它上面，出题的退路有三级：它的会话建不起来、或者出题回合没跑完，就退到另一个 coach 会话；那个也不行，再回到主会话排队。没配时第二个会话就是 coach 会话，只有后两级。通关、XP、连胜、错题和单元 3 的题只写在这台设备的浏览器里，这个视角的定位是能力的 showcase，不是完整应用。",
         agent: "english-coach",
         app: "english",
         meta: [
@@ -407,7 +420,7 @@ agentOptions:
         // allowedTools），记忆走平台注入的记忆工具，不是它自己挂的工具；而能力卡片的
         // 点亮判据沿用的是基表里的 save_memory / recall_memories ——在这个视角上永远亮不了。
         // 摆一条亮不起来的卡，等于替它说一句自己核不到的话。数学课/语文课两处 memory override
-        // 也有同一问题，还没改。
+        // 也有同一问题：那两处的文案已改成平台现状、出处改指各自的 agent.yaml，卡片仍然不会被点亮。
         capabilities: ["voice-turn", "file-agent", "sandbox", "mcp", "generative-ui", "session-turn", "stream", "config-values"],
         capabilityOverrides: {
           "file-agent": { evidence: "agenthub/agents/edu-english-coach/agent.yaml + CLAUDE.md" },
@@ -434,6 +447,11 @@ agentOptions:
         // 路径图版没有开场白按钮（进页面就建会话、预出第一关），这里留空。
         openers: [],
         agentFile: "agenthub/agents/edu-english-coach/agent.yaml",
+        // 主会话（讲解、跟读点评、单元点评）在 coach 上；读音由朗读 Agent 合成，单元 3 的题由出题 Agent 出（没配时退回 coach）。
+        extraAgents: [
+          { dir: "edu-english-reader", role: "朗读" },
+          { dir: "edu-english-lesson-gen", role: "出题" },
+        ],
         snippet: `# CLAUDE.md 里的上法（节选）
 # 1. 【出题】学员每做完单元 1、2 的一关，后台照错题调一次 present_lesson 出单元 3 的一关
 #    （听音、拼句、填空、跟读各 2 道），这一轮不写字
@@ -444,12 +462,12 @@ mcpServers:
   - vcrd_………                    # 教育 MCP：课件/展示（含 present_lesson）
 
 voice:                          # 跟读：语音回合只做转写，点评是文字（不声明 output）
-  input: { provider: modelgate, model: qwen3-asr-flash, language: en }`,
+  input: { provider: dashscope, modelService: bailian, model: qwen3-asr-flash, language: en }`,
       },
       {
         id: "roleplay",
         name: "情景对话",
-        persona: "一年级学生",
+        persona: "青少年和成人",
         tagline: "Agent 实时语音对话：跟店员用英语聊三四句",
         intro:
           "这个视角展示 Agent 实时语音对话。手机里是一家咖啡店，店员 Sam 是一个 format: live 的 Agent：他不建沙箱、不烘焙镜像，会话只由「定义文档 + 模型服务」组成，所以开口快；代价是他调不了任何工具，小结卡是前端从你们的对话里自己算出来的。按住按钮说英语，平台先用 qwen3-asr-flash 把你的话转写成文字交给他，他回的那句再由 qwen3-tts-flash 合成为语音播放出来（对讲机式的半双工：按住才录，松手就发）。练法上不是做题，而是把刚学的句子用出去：三四轮之后看小结，说了几句、用到了哪些句型、点到了哪几个词。不打分，也不评发音（转写会顺手把读音纠成正确的词，评不准）。",
@@ -482,8 +500,8 @@ modelService: model              # live 臂必填：会话要在创建时冻结�
 model: gemini-3.1-flash-lite
 
 voice:                           # 转写在派发前、合成在回合终态后
-  input:  { provider: modelgate, model: qwen3-asr-flash, language: en }
-  output: { provider: modelgate, model: qwen3-tts-flash, voice: Cherry, format: mp3 }
+  input:  { provider: dashscope, modelService: bailian, model: qwen3-asr-flash, language: en }
+  output: { provider: dashscope, modelService: bailian, model: qwen3-tts-flash, voice: Cherry, format: mp3 }
 
 memory:
   enabled: false                 # 上下文全在这一条会话里，不花记忆召回那一趟`,
@@ -491,12 +509,196 @@ memory:
         teacherName: "Sam",
         welcomeText: "你走进一家咖啡店，店员 Sam 在柜台后面。点一下开始，他会先跟你打招呼。",
       },
+      {
+        id: "freetalk",
+        name: "自由对话",
+        persona: "青少年和成人",
+        tagline: "实时语音通话：麦克风一直开着，能接话也能打断",
+        intro:
+          "这个视角展示实时语音。和情景对话那种「按住说话、松手发」的对讲机不同，这里浏览器和平台的实时语音网关建了一条 WebSocket：麦克风的音频直接上去、模型的原生音频直接下来，中间没有「转写 → 文本模型 → 合成」三段，你还没说完它就能接话，它说的时候你也能点「打断」插话。票由站点服务端换：`POST /api/agenthub/voice-ticket` 先验访客身份和会话归属，再用站点的 token 去平台换一张 60 秒有效、只能用一次的票；票在 WebSocket 的子协议里交给网关，不进地址栏，也不进站点日志。通话的转写按轮次画在气泡里，你和 Ava 两边都有。挂断之后把转写随 `【点评】` 发给同一个会话，Ava 用中文写两三句点评，点「看点评」展开。线路建不起来的时候（平台还没在网关上放行站点的来源、票被拒、麦克风被拒、连着两次没有应答）页面落回情景对话那套「按住说话」，同一个会话、同一份提示词接着聊，页面上会写明「实时通话不可用，已切换为按住说话」。",
+        agent: "freetalk",
+        app: "freetalk",
+        meta: [
+          { label: "Agent", value: "edu-english-freetalk" },
+          { label: "运行时", value: "format: live（不建沙箱）" },
+          { label: "通话", value: "实时语音（WebSocket 双向流）" },
+          { label: "回落", value: "按住说话（同一个会话）" },
+          { label: "点评", value: "挂断后中文点评 + 转写原文" },
+        ],
+        capabilities: ["live", "realtime", "voice-turn", "file-agent", "session-turn", "model-gate"],
+        capabilityOverrides: {
+          live: { evidence: "agenthub/agents/edu-english-freetalk/agent.yaml · format: live" },
+          "file-agent": { evidence: "agenthub/agents/edu-english-freetalk/agent.yaml + CLAUDE.md" },
+          "model-gate": {
+            blurb:
+              "回落的按住说话里，转写 qwen3-asr-flash 和合成 qwen3-tts-flash 走阿里云百炼，用的是 agent.yaml 里 `voice.input` / `voice.output` 各自声明的 `modelService`；挂断后文字点评的正文模型 gemini-3.1-flash-lite 走顶层的 `modelService`。实时通话本身连的是平台的实时语音网关，由 `voice.realtime` 声明，不经这几个模型服务。",
+            evidence: "agenthub/agents/edu-english-freetalk/agent.yaml · voice.realtime 与 voice.input / voice.output",
+          },
+          "voice-turn": {
+            blurb:
+              "这一支的主力是实时语音，语音回合是它的回落：线路建不起来时，按住说话录一段，平台先转写再交给同一个 Agent，回复再合成分段音频播出来。两种说话方式声明在同一个 agent.yaml 里，所以回落不用换 Agent，也不用换会话。",
+            evidence: "agenthub/agents/edu-english-freetalk/agent.yaml · voice.input / voice.output",
+          },
+        },
+        openers: ["开始自由对话"],
+        agentFile: "agenthub/agents/edu-english-freetalk/agent.yaml",
+        snippet: `apiVersion: agenthub/v1alpha1
+format: live                     # 不建沙箱：没有 environment / mcpServers / agentOptions
+modelService: model              # live 必填：换成你项目里注册的模型服务名
+model: gemini-3.1-flash-lite     # 只跑回落的按住说话和文字点评
+
+voice:
+  realtime:                      # 实时通话：浏览器 ↔ 平台实时语音网关
+    provider: vertex-gemini-live
+    model: gemini-live-2.5-flash-native-audio
+    voice: Aoede
+    language: en-US
+  input:  { provider: dashscope, modelService: bailian, model: qwen3-asr-flash, language: en }   # 回落：按住说话
+  output: { provider: dashscope, modelService: bailian, model: qwen3-tts-flash, voice: Cherry, format: mp3 }
+
+memory:
+  enabled: false                 # 声明了 voice.realtime 就必须关`,
+        steps: [
+          {
+            title: "把实时语音写进 agent.yaml",
+            body:
+              "通话用哪个供应商、哪个模型、什么音色，写在 voice.realtime 这一段里（上面那份 agent.yaml 就是完整的声明）。它跟着 Agent 的版本走，页面这一侧不用改。",
+          },
+          {
+            title: "服务端换一张一次性的票",
+            body:
+              "浏览器不接触平台 token。它把会话号 POST 给站点自己的 /api/agenthub/voice-ticket，由站点按顺序过四道守卫——站点配没配 token、请求是不是从本站发起、访客身份、会话归属——再用站点的 token 去平台换一张 60 秒、只能用一次的票。票在 WebSocket 的子协议里交给网关：不进地址栏，也不进日志（日志里只有 HMAC 代号）。",
+            file: "apps/storefront-web/app/api/agenthub/voice-ticket/route.ts",
+            code: `export async function POST(req: Request) {
+  if (!isAgentHubConfigured("freetalk")) return fail(501, "not_configured");
+  if (crossSiteRequest(req)) return fail(403, "cross_origin_not_allowed");
+
+  const visitorId = resolveVisitor(req, undefined);
+  if (!visitorId) return visitorRequired();
+
+  // …（从请求体读 sessionId）
+  if (!ownsSession(req, sessionId)) return sessionNotFound();
+
+  try {
+    const { client } = getAgentHubClient();
+    const ticket = await client.sessions.createVoiceTicket(sessionId, { signal: req.signal });
+    // …（日志只写代号与到期时刻，票本身不落日志）
+    return Response.json(
+      { ticket: ticket.ticket, gatewayUrl: ticket.gatewayUrl, expiresAt: ticket.expiresAt },
+      { status: 200, headers: { "cache-control": "no-store" } },
+    );
+  } catch (err) {
+    // …（平台拒了：错误码原样透给页面，由页面决定是回落还是重试）
+  }
+}`,
+          },
+          {
+            title: "浏览器建立通话",
+            body:
+              "页面用 SDK 的 createRealtimeVoiceClient 建连。gatewayUrl 是 getter——它要到换票回包才出现，所以读的时候现取；getTicket 就是调上面那条路由；转写、状态、错误各有一个回调。麦克风的 PCM 直接上行，模型的原生音频直接下行，中间不加转写和合成。",
+            file: "apps/storefront-web/components/mobile/FreeTalkApp.tsx",
+            code: `    const client = createRealtimeVoiceClient({
+      // 网关地址在换票回包里才有，SDK 在 \`getTicket()\` 之后才读它，所以写成 getter。
+      get gatewayUrl() {
+        return gatewayUrlRef.current;
+      },
+      getTicket: async () => {
+        // …（先等会话就绪：waitForSessionId）
+        const res = await fetch("/api/agenthub/voice-ticket", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId: sid }),
+        });
+        // …（不是 2xx：把 HTTP 状态与错误码留在 ticketFailureRef 里，抛给 SDK）
+        const data = (await res.json()) as { ticket?: unknown; gatewayUrl?: unknown };
+        // …
+        gatewayUrlRef.current = data.gatewayUrl;
+        ticketIssuedRef.current = true;
+        // …（换成一张新票就把上一次的失败清掉）
+        return data.ticket;
+      },
+      onTranscript: (event) => {
+        eventsRef.current.push(event);
+        republishTurns();
+      },
+      onState: (state) => {
+        if (endedRef.current) return;
+        setVoiceState(state);
+        // …（摘掉瞬时提示和「正在重连」）
+      },
+      onError: (event) => {
+        if (event.code === "REALTIME_STOPPED") return;
+        if (event.code === "RECONNECTING") {
+          setReconnecting(true);
+          return;
+        }
+        handleFailure(event.code, event.retryable);
+      },
+    });`,
+          },
+          {
+            title: "线路不通就回落到按住说话",
+            body:
+              "换票回 409 / 503、拿到票之后建连失败、麦克风拿不到、连着两次没人应答——这四种换成情景对话那套「按住说话」，同一个会话、同一份提示词接着聊，页面上写明「实时通话不可用，已切换为按住说话」。两种例外不走回落：会话还没就绪（SESSION_NOT_READY）、票还没拿到就超时，这两个是等一下再点一次。往哪一步分流、页面上说哪句话，是同一张表。",
+            file: "apps/storefront-web/lib/agenthub/realtime-errors.ts",
+            code: `export function ticketFailureFallsBack(failure: TicketFailure): boolean {
+  return failure.status === 409 || failure.status === 503;
+}
+
+export function classifyCallFailure(ctx: CallFailureContext): { action: CallFailureAction; code?: string } {
+  if (ctx.ticket) {
+    // SESSION_NOT_READY 也是 409，但等一下就好，不回落。
+    if (ctx.ticket.code === "SESSION_NOT_READY") return { action: "retry", code: ctx.ticket.code };
+    if (ticketFailureFallsBack(ctx.ticket)) return { action: "fallback", code: ctx.ticket.code };
+    // …
+  }
+  // …（建连失败、麦克风拿不到、连着两次 no_response 在这里同类分流）
+  return { action: "error", code: ctx.code };
+}
+
+export const FALLBACK_NOTICE = "实时通话不可用，已切换为按住说话";`,
+          },
+        ],
+        lessonTitle: "自由对话",
+        teacherName: "Ava",
+        welcomeText:
+          "点一下开始，麦克风会一直开着，你和 Ava 像打电话一样用英语聊天。聊完挂断，会给你一张带转写的点评卡。",
+      },
     ],
     extensions: [
       { title: "更多语种", body: "换一份出题规则和词库，同一套路径图和一屏一题的形式可以用来教日语、西班牙语。" },
       { title: "更多对话场景", body: "咖啡店换成面试、开会、问路，同样是按住说、松手听的一来一回。" },
       { title: "学习记录", body: "通关、XP 和连胜现在只存在这台设备的浏览器里；接上记忆或业务后端，就能按周汇总给家长或老师看。" },
     ],
+  },
+  {
+    // 团队协作（id 和路径是 ops）：只有「团队群」一个视角，是脚本回放。
+    id: "ops",
+    name: "团队协作",
+    icon: "协",
+    blurb: "团队 Slack 群里的 Agent：告警和故障它接得住，可以撤销的小事直接办，改线上的事先请人确认，随时可以叫停。",
+    surfaces: [
+      {
+        // 团队群（原型）：一段脚本回放，画的是目标形态。没有 agent、不建会话，页面由
+        // `TeamChatStage` 画，不走 `CaseStage`：右栏的文案、代码和能力卡在 `lib/team-chat/platform.ts`，
+        // 这里的 intro、meta、capabilities、openers、snippet 这一页都不渲染。
+        id: "team-chat",
+        name: "团队群",
+        persona: "团队成员",
+        tagline: "Agent 在团队群里旁听、动手，大事先请人确认",
+        intro:
+          "把 Agent 接进团队的 Slack 群：它旁听、插话、直接办小事，改线上的事先请人确认，随时可以叫停。手机里是按脚本播放的原型，不能操作。",
+        agent: null,
+        app: "team-chat",
+        meta: [],
+        capabilities: [],
+        openers: [],
+        agentFile: "",
+        snippet: "",
+      },
+    ],
+    // 这个场景的页面不走 `CaseStage`，「同一套能力的其他用法」一节不渲染。
+    extensions: [],
   },
 ];
 
@@ -512,6 +714,8 @@ export function findSurface(scenario: Scenario, id: string | undefined): Surface
 
 /** 跨场景通用：平台在这类场景里给你的东西。 */
 export const PLATFORM_EXTENSIONS: CaseExtension[] = [
+  { title: "文字和语音互转", body: "任何 Agent 在 agent.yaml 里声明 voice 就能收发语音：录音先转写成文字再交给 Agent，回答边生成边合成，第一段合成好就可以播放。转写和合成各用哪个服务上的哪个模型，写在声明里。" },
+  { title: "Agent 实时语音对话", body: "format: live 的 Agent 不建沙箱，会话只由定义文档和模型服务组成，再声明 voice 就是对讲机式的语音对话。它和其他 Agent 一样经流水线发布，git push、CLI 和 SDK 都能触发。" },
   { title: "已有系统封装成工具", body: "任何 HTTP 接口、内部服务、数据库查询都能封装成 MCP Server 注册进来，Agent 文件引用一行 ID 就能用。" },
   { title: "一个 Agent 多个端", body: "生成式 UI 返回的是结构化数据，不是 HTML。App、Web、企业微信、大屏各自渲染，Agent 只写一次。" },
   { title: "风险动作有闸门", body: "读操作放开、写操作审批、敏感操作双人确认。审批策略是平台机制，不靠每个 Agent 作者自觉。" },

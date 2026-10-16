@@ -72,6 +72,14 @@ payload in the MCP result; the UI still renders it), just with Claude Code's
    correctly for an MCP-delivered tool surface regardless of transport (HTTP in
    CMA's Managed Agents path, stdio here).
 
+5. **Inserted** one bullet right after the `# Tools` two-search bullet
+   (`derive-claude-md.py` patch 4): "A search result marked outside_price_filter was
+   found …". This deployment's `search_products` (`storefront_stdio_server/search.py`)
+   answers a price-filtered search with the matches beyond the filter, marked, instead
+   of whatever the filter left (e.g. "camping tent" under a 600 cap comes
+   back as a headlamp, and the model searches again). The two-search bullet itself is
+   unchanged and still governs searches that come back empty.
+
 ## Verification
 
 `wc -c CLAUDE.md` was 12,995 at last derivation — well under the 32,768-char hard

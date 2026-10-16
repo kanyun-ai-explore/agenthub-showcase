@@ -8,7 +8,7 @@
 import type { Metadata } from "next";
 import { Footer, ScenarioIcon, TopBar } from "@/components/showcase/Chrome";
 import { CAPABILITIES } from "@/lib/showcase/capabilities";
-import { DOC_LINKS } from "@/lib/showcase/links";
+import { AGENTHUB_DOCS, DOC_LINKS } from "@/lib/showcase/links";
 import { PLATFORM_EXTENSIONS, SCENARIOS } from "@/lib/showcase/cases";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +19,10 @@ export const metadata: Metadata = {
 };
 
 export default function Home() {
-  const agents = SCENARIOS.reduce((n, s) => n + s.surfaces.length, 0);
+  // 回放视角（`agent: null`）没有在线的 Agent，不算进去，在页面上单独说。
+  const surfaces = SCENARIOS.flatMap((s) => s.surfaces);
+  const agents = surfaces.filter((f) => f.agent !== null).length;
+  const replays = surfaces.length - agents;
   const figures = [
     { n: SCENARIOS.length, label: "业务场景" },
     { n: agents, label: "个 Agent 在线" },
@@ -40,7 +43,7 @@ export default function Home() {
               运行的 Agent
             </h1>
             <p className="hero-sub">
-              {SCENARIOS.length} 个场景、{agents} 个 Agent 都在线运行，可以在页面上直接操作。它们演示平台的几项能力：用文件定义 Agent、经流水线发布、用生成式 UI 渲染结果。
+              {SCENARIOS.length} 个场景。{agents} 个 Agent 在线运行，可以在页面上直接操作{replays > 0 ? `；另有 ${replays} 个视角是按脚本播放的回放` : ""}。它们演示平台的几项能力：用文件定义 Agent、经流水线发布、用生成式 UI 渲染结果。
             </p>
             <p>
               多数 Agent 在隔离沙箱里调用业务工具；情景对话的 Agent 不建沙箱，用的是 live 运行时。每个演示页旁边写明这一幕用到了平台的哪些能力，以及每项能力在仓库里的出处。
@@ -49,7 +52,7 @@ export default function Home() {
               <a className="btn btn-primary btn-lg" href={`/showcase/${SCENARIOS[0].id}`}>
                 进入演示
               </a>
-              <a className="btn btn-lg" href={DOC_LINKS[0].href} target="_blank" rel="noreferrer">
+              <a className="btn btn-lg" href={AGENTHUB_DOCS} target="_blank" rel="noreferrer">
                 阅读文档
               </a>
             </div>
@@ -67,7 +70,7 @@ export default function Home() {
         <section className="sec">
           <div className="sec-head">
             <h2>场景</h2>
-            <span>每个场景由一组分工不同的 Agent 组成，点进去即可操作</span>
+            <span>每个场景由一组分工不同的 Agent 组成，点进去即可操作；标了「回放」的只能看</span>
           </div>
           <div className="scen-grid">
             {SCENARIOS.map((scenario) => (
@@ -82,7 +85,7 @@ export default function Home() {
                     {scenario.surfaces.map((s) => (
                       <li key={s.id}>
                         <b>{s.name}</b>
-                        <span>{s.persona}</span>
+                        <span>{s.agent === null ? `${s.persona} · 回放` : s.persona}</span>
                       </li>
                     ))}
                   </ol>

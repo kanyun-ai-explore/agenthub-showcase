@@ -6,7 +6,7 @@ test / production 槽位。
 
 ## 目录布局
 
-- `agents/<slug>/`：一个目录 = 一个 Agent（判据是它下面有 `agent.yaml`）。当前七个：
+- `agents/<slug>/`：一个目录 = 一个 Agent（判据是它下面有 `agent.yaml`）。主要的几个：
 
   | 目录 | 说明 |
   | --- | --- |
@@ -17,6 +17,11 @@ test / production 槽位。
   | `agents/edu-chinese-tutor/` | 语文课 |
   | `agents/edu-homework-qa/` | 作业批改 |
   | `agents/edu-learning-analytics/` | 学情分析 |
+  | `agents/edu-english-coach/` | 英语小课：路径图加关卡，每一关的题由 Agent 现场出 |
+  | `agents/edu-english-lesson-gen/` | 英语小课单元 3 的出题专用 Agent，配了就替 coach 跑后台出题 |
+  | `agents/edu-english-reader/` | 朗读器，`format: live`，只声明 `voice.output`，给英语小课合成读音 |
+  | `agents/edu-english-roleplay/` | 情景对话，`format: live` + 按住说话的语音回合 |
+  | `agents/edu-english-freetalk/` | 英语自由对话，`format: live` + 实时语音 |
 
 - `environments/`、`subagents/`：平台保留目录，本仓库没用。
 
@@ -48,6 +53,13 @@ agenthub agent check --refs --require-remote --project-id <项目 uuid>
 `cma-merchant` 的 `agent.yaml` 用了 `mcpServers[].tools[]` 这个较新的声明形态，发布出去的
 CLI 如果 schema 落后于平台契约，可能会把这个 key 报成无法识别。**这时不要靠删掉 `tools:`
 来「修复」**，升级 CLI 即可。
+
+`edu-english-freetalk` 的 `voice.realtime` 也是较新的声明形态，CLI 的 schema 落后于平台契约时
+会把它报成无法识别。**不要靠删掉这一段来「修复」**，以平台提交流水线的校验为准。
+
+英语几个 Agent 的 `voice.input` / `voice.output` 写的是 `provider: dashscope` 加一个 `modelService`，也比发布出去的 SDK / CLI 里的 schema 新，按旧 schema 校验会报这两段。同样以平台提交流水线的校验为准。
+
+评测里的 `defaults.judgeModelService`（带 `llm` grader 的 suite）和 `userSim.simModelService`（`userSim` 用例）是平台要求写的判分 / 模拟用户通道，旧 CLI 会报成无法识别。删掉它们 suite 会在开跑前就失败（`invalid_definition`），也不要删。
 
 ## 相关文档
 

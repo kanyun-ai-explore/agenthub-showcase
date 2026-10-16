@@ -4,7 +4,7 @@
 # unpacked, so this `pip install` of the package's own dirs cannot work there
 # (measured: every eval session fails the setup gate). On the platform the
 # packages are imported via
-# PYTHONPATH (agent.yaml `env`). Third-party deps stay in the `cma-python`
+# PYTHONPATH (agent.yaml `env`). Third-party deps stay in the `cma-python-podagent`
 # Environment image. Idempotent on a persistent local workspace.
 set -euo pipefail
 [ -f "$HOME/.cma-setup-done" ] && exit 0

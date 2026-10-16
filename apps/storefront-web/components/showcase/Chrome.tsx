@@ -94,7 +94,7 @@ export function SideNav({ scenario, surfaceId }: { scenario: Scenario; surfaceId
             <span className="side-idx">{String(i + 1).padStart(2, "0")}</span>
             <span className="side-body">
               <b>{s.name}</b>
-              <span>{s.persona}</span>
+              <span>{s.agent === null ? `${s.persona} · 回放` : s.persona}</span>
             </span>
           </a>
         ))}

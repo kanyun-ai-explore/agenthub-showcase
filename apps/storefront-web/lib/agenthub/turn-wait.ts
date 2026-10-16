@@ -66,5 +66,7 @@ export function settledTurnBody(turn: SettledTurn, turnId: string) {
     cards: rendered.cards,
     toolCalls: rendered.toolCalls,
     reasoningCount: rendered.reasoning.length,
+    // 这一回合的记忆召回状态（召回内容站点读不到，只有状态）。
+    memoryRecall: turn.memoryRecall?.state ?? null,
   };
 }

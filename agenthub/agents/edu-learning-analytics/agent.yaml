@@ -22,7 +22,8 @@ mcpServers:
   # 注册时对 get_student_progress 声明了 always_ask：调用会暂停等人工审批。
   - vcrd_PLACEHOLDER
 
-environment: cma-python         # 与电商两个 agent 同一个 Environment
+environment: platform-default     # 评测会话按这个名字解析环境：项目里没有同名环境时，回落到平台共享的 platform-default；
+                                  # 槽位会话走槽位绑定的环境
 
 agentOptions:
   maxTurns: 60

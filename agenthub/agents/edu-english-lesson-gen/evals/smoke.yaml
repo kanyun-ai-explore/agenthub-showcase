@@ -1,0 +1,141 @@
+apiVersion: agenthub/v1alpha1
+kind: EvalSuite
+purpose: regression
+
+# 冒烟：出题 agent 只接一种消息（【出题】），该做的事全写在 CLAUDE.md 里——调一次 present_lesson 把 8 道一批出齐，
+# 四类题各 2 道，不调别的工具，不写字（一定要回只回 OK）。
+#
+# 只用确定性判据（工具轨迹、入参模式、回复正则），没有 llm grader，所以不用声明 judgeModelService，也没有判官和被测
+# 模型同名的自评门问题。
+#
+# gate / soft 怎么分：promote 门禁里 failed 是终身的（同一个 revision 红一次不能重跑转绿），所以 gate 只放 18 关里
+# 关关稳住的行为（deepseek-flash 关推理）：回合跑完、调了 present_lesson、没绕去单题工具、
+# 四类题每类至少一道（页面硬要求听音和跟读，缺了要重出）。没到 18/18 的放 soft：每类各 2 道（17/18）、
+# 只回 OK（17/18，有一次调工具前写了一句）。soft 违例在 run 详情页照样可见（softMisses）。
+#
+# 消息原样照站点的 generateLessonMessage（apps/storefront-web/lib/course/english-lesson.ts）：一条零错题，
+# 一条带 3 道错题。每条单轮，不靠上下文（评测的 followup 不带对话历史）。
+# 入参模式对的是 JSON.stringify 之后的工具入参（平台 transcript grader 的 inputMatches），键值之间没有空格，这里放宽成 \s*。
+
+cases:
+  - id: lesson-no-mistakes
+    description: >-
+      【出题】零错题：出一关单元 1、2 的综合练习——只走 present_lesson，四类题都有，不写字。
+    turns:
+      - user: |-
+          【出题】第 3 单元「按你的错题加练」· 第 1 关「错题加练 1」
+          lesson_id：b1-u3-l1#smoke1
+          学员在单元 1、2 错过的题：没有。按单元 1、2 的语法点和话题出一关综合练习。
+          调一次 present_lesson（lesson_id=b1-u3-l1#smoke1，batch=1，batches=1），把这一关的 8 道一批出齐：听音选词、拼句、填空、跟读各 2 道。每道题的 hint 和 explain 各不超过 20 个汉字。这一轮只调这一次工具，调用之前和之后都不写字：不写「出好了」，不总结题目；一定要回一句就只回 OK。
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: transcript
+        label: lesson-presented
+        severity: gate
+        expect:
+          calledTool: { name: mcp__course__present_lesson, times: ">=1" }
+      - type: transcript
+        label: no-single-tool-detour
+        severity: gate
+        expect:
+          forbiddenTools:
+            [
+              mcp__course__get_lesson,
+              mcp__course__present_slide,
+              mcp__course__present_suggestions,
+              mcp__course__present_exercise,
+              mcp__course__present_listen_choice,
+              mcp__course__present_word_bank,
+              mcp__course__present_fill_blank,
+              mcp__course__present_read_aloud,
+            ]
+      - type: transcript
+        label: four-types-present
+        severity: gate
+        expect:
+          toolInputPatterns:
+            required:
+              - '"type"\s*:\s*"listen_choice"'
+              - '"type"\s*:\s*"word_bank"'
+              - '"type"\s*:\s*"fill_blank"'
+              - '"type"\s*:\s*"read_aloud"'
+      - type: transcript
+        label: two-of-each
+        severity: soft
+        expect:
+          toolInputPatterns:
+            required:
+              - '"type"\s*:\s*"listen_choice"[\s\S]*"type"\s*:\s*"listen_choice"'
+              - '"type"\s*:\s*"word_bank"[\s\S]*"type"\s*:\s*"word_bank"'
+              - '"type"\s*:\s*"fill_blank"[\s\S]*"type"\s*:\s*"fill_blank"'
+              - '"type"\s*:\s*"read_aloud"[\s\S]*"type"\s*:\s*"read_aloud"'
+      - type: reply
+        label: only-ok
+        severity: soft
+        expect:
+          matches: '^\s*(OK)?\s*$'
+
+  - id: lesson-with-mistakes
+    description: >-
+      【出题】带 3 道错题：照错题出一关——同一套行为判据，lesson_id 原样抄回。
+    turns:
+      - user: |-
+          【出题】第 3 单元「按你的错题加练」· 第 2 关「错题加练 2」
+          lesson_id：b1-u3-l2#smoke2
+          学员在单元 1、2 错过的题（最近的在前，共 3 道）：
+          1. 第 1 单元「出门旅行」· 第 4 关「你去过吗」，听音选词：念的是「Have you ever been to Japan?」，选项 Have you ever been to Japan? / Did you ever go to Japan? / Have you ever gone to Japan?，正确答案是 Have you ever been to Japan?；学员的答案「Did you ever go to Japan?」
+          2. 第 2 单元「生活和工作」· 第 2 关「看病」，填空：「You ___ go to work today. You need to rest.」，选项 should / must / shouldn't，正确答案是 shouldn't；学员的答案「should」
+          3. 第 2 单元「生活和工作」· 第 3 关「工作安排」，拼句：题面「翻译成英文：你有空开个会吗？」，正确答案是「Are you available for a meeting」；学员的答案「you Are available for a meeting」
+          调一次 present_lesson（lesson_id=b1-u3-l2#smoke2，batch=1，batches=1），把这一关的 8 道一批出齐：听音选词、拼句、填空、跟读各 2 道。每道题的 hint 和 explain 各不超过 20 个汉字。这一轮只调这一次工具，调用之前和之后都不写字：不写「出好了」，不总结题目；一定要回一句就只回 OK。
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: transcript
+        label: lesson-presented
+        severity: gate
+        expect:
+          calledTool: { name: mcp__course__present_lesson, times: ">=1" }
+      - type: transcript
+        label: no-single-tool-detour
+        severity: gate
+        expect:
+          forbiddenTools:
+            [
+              mcp__course__get_lesson,
+              mcp__course__present_slide,
+              mcp__course__present_suggestions,
+              mcp__course__present_exercise,
+              mcp__course__present_listen_choice,
+              mcp__course__present_word_bank,
+              mcp__course__present_fill_blank,
+              mcp__course__present_read_aloud,
+            ]
+      - type: transcript
+        label: four-types-present
+        severity: gate
+        expect:
+          toolInputPatterns:
+            required:
+              - '"type"\s*:\s*"listen_choice"'
+              - '"type"\s*:\s*"word_bank"'
+              - '"type"\s*:\s*"fill_blank"'
+              - '"type"\s*:\s*"read_aloud"'
+      - type: transcript
+        label: lesson-id-copied
+        severity: soft
+        expect:
+          toolInputPatterns:
+            required:
+              - '"lesson_id"\s*:\s*"b1-u3-l2#smoke2"'
+      - type: reply
+        label: only-ok
+        severity: soft
+        expect:
+          matches: '^\s*(OK)?\s*$'

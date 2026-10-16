@@ -1,4 +1,4 @@
-import { PilotPlatformApiError } from "@kanyun-ai-infra/agenthub";
+import { isTerminalTurnStatus, PilotPlatformApiError } from "@kanyun-ai-infra/agenthub";
 import { getAgentHubClient, isAgentHubConfigured } from "@/lib/agenthub/client";
 import { ownsSession, sessionNotFound } from "@/lib/agenthub/session-binding";
 import { renderTurn } from "@/lib/agenthub/turn-parts";
@@ -16,6 +16,13 @@ import { readClip, readerAgentId, ReaderError } from "@/lib/course/reader-servic
  * `readerTextFor`（约束 3、4：只念听音选词和跟读、限长度、限字符集、按题型限词数），再交给
  * `readClip`（约束 2、3、5：reader 会话不出这个进程、按 coach 会话限速、复述必须逐字相等）。
  * 会话结束（terminate）以后那一轮照样读得到（实测），所以刷新页面、本机存下的单元 3 也能取音。
+ *
+ * 那一轮**还在跑**时也读得到（`present_lesson` 的结果在入参之后 0.13–0.15 s 就在
+ * `assistant.parts` 里，离终态还有几秒），页面在题一出现时就来取首句。取字的链路不变：`renderTurn` 只从工具
+ * **结果**里拿卡，所以念的是工具已经收下的那次调用，被拒的草稿取不出字（422，不发朗读回合）。只是没结束的
+ * 回合后面还可能再出一版，同一个坐标上的内容会变：非终态一律回 `no-store`，不让浏览器把这一段存下来。
+ * 终态按平台自己的定义（`isTerminalTurnStatus`：completed / failed / rejected / aborted / interrupted）——
+ * 回合失败了但工具已经收下的那一关页面照样会用（`settleLesson`），它的读音和以前一样可以缓存。
  *
  * 响应头 `X-Reader-Text` 是服务端念的那句（encodeURIComponent 过）：页面拿它和题上显示的原文比，
  * 不一致就不放——草稿和定稿在同一个下标上不是同一道题时，不会放错音。
@@ -58,9 +65,11 @@ export async function GET(req: Request) {
 
   const { client } = getAgentHubClient();
   let parts: unknown;
+  let settled = false;
   try {
     const turn = await client.sessions.turns.get(sessionId, turnId, { signal: req.signal });
     parts = turn.assistant?.parts;
+    settled = isTerminalTurnStatus(turn.status);
   } catch (err) {
     if (err instanceof PilotPlatformApiError && err.status === 404) return fail(404, "turn_not_found");
     console.warn(`[course/audio] turns.get failed: ${err instanceof Error ? err.name : "unknown"}`);
@@ -75,8 +84,8 @@ export async function GET(req: Request) {
     return new Response(audio.body, {
       headers: {
         "Content-Type": audio.contentType,
-        // 坐标对应的内容不会变（那一轮已经结束），浏览器可以缓存；带学员会话，只给这个浏览器。
-        "Cache-Control": "private, max-age=86400",
+        // 那一轮到终态了，坐标对应的内容不会再变，浏览器可以缓存（带学员会话，只给这个浏览器）；没到终态的不存。
+        "Cache-Control": settled ? "private, max-age=86400" : "no-store",
         "X-Reader-Text": encodeURIComponent(picked.text),
         "X-Reader-Source": source,
       },

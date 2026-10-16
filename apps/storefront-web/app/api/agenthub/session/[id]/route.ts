@@ -1,4 +1,4 @@
-import { getAgentHubClient, isAgentHubConfigured } from "@/lib/agenthub/client";
+import { getAgentHubClient, isAgentHubReachable } from "@/lib/agenthub/client";
 import { ownsSession, sessionNotFound } from "@/lib/agenthub/session-binding";
 import { errorResponse } from "@/lib/backend/errors";
 import { portalSessionHref } from "@/lib/showcase/links";
@@ -12,7 +12,7 @@ import { portalSessionHref } from "@/lib/showcase/links";
  * 当时的接口测试只验了「调用成功」，没验「字段存在」，所以没抓到。
  */
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  if (!isAgentHubConfigured()) {
+  if (!isAgentHubReachable()) {
     return Response.json({ error: "not_configured" }, { status: 501 });
   }
   try {

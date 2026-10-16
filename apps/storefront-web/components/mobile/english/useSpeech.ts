@@ -4,10 +4,17 @@
  * 读音：全部来自平台的语音能力，站点不直调模型网关。
  * - 单元 1、2：平台预生成的静态文件（`/course-audio/*.m4a`，清单见 `lib/course/course-audio.ts`）；
  * - 单元 3：运行时经 `/api/course/audio` 由朗读 agent 合成，浏览器只报题的坐标。
- * 一关的题一到手就把这一关要念的句子都预取成本地 blob（`prefetch`），作答时点喇叭直接放。
+ * 一关的题一到手就把这一关要念的句子都预取成本地 blob（`prefetch`），作答时点喇叭直接放。预取**按题序**：
+ * 首句先单独取完，其余再并发——朗读会话按请求到达的先后排队，同一刻发出去的话首句会跟别的
+ * 句子抢，谁先合成由站点决定（比如第 0 道和第 3 道同时发，第 3 道先到，首句要等 8.73 s）。
  *
- * 运行时那一句拿回来时，响应头 `X-Reader-Text` 是服务端念的那句：和题上的原文不一致就不收
- * （草稿和定稿在同一个下标上不是同一道题时，不放错音）。
+ * 单元 3 出题的回合还在跑时，页面只送首句来取（`lib/course/course-audio.ts` 的 `prefetchClips`），
+ * 回合到终态再送整关。两次都按**原文**认：还在取的那一句共用同一个请求（`inflight`），取到了的不再取
+ * （`urls`）——终态时首句原文没变，用的就是早取的那一段；变了，早取的那段没人用，照新的原文去取。
+ *
+ * 运行时那一句拿回来时，响应头 `X-Reader-Text` 是服务端念的那句：和题上的原文不一致就不收、不放
+ * （屏幕上这道题和平台那一轮里同一个下标上的不是同一道时，不放错音）。回合还在跑时取回来的也是这一条规矩，
+ * 对得上就放，不等终态。
  *
  * 取不到（没配朗读 agent / 平台没合成成 / 限速）就退到浏览器自带的 speechSynthesis，题上如实标出
  * 这次是「本机语音」。**正在取的那一句先等一会儿**（`INFLIGHT_WAIT_MS`）：
@@ -112,7 +119,10 @@ export function useSpeech() {
       const todo = [...new Set(list.map((c) => c.text))]
         .map((text) => clips.current.get(text) as Clip)
         .filter((clip) => clip.src && !urls.current.has(clip.text));
-      let next = 0;
+      if (todo.length === 0) return;
+      // 按题序取：首句单独先取完，其余再并发。首句取不到（null）不挡后面的——照旧回落。
+      await fetchUrl(todo[0]);
+      let next = 1;
       const worker = async () => {
         while (next < todo.length) {
           const clip = todo[next];
@@ -120,7 +130,7 @@ export function useSpeech() {
           await fetchUrl(clip);
         }
       };
-      await Promise.all(Array.from({ length: Math.min(PREFETCH_CONCURRENCY, todo.length) }, worker));
+      await Promise.all(Array.from({ length: Math.min(PREFETCH_CONCURRENCY, todo.length - 1) }, worker));
     },
     [fetchUrl],
   );
@@ -134,8 +144,8 @@ export function useSpeech() {
   }, []);
 
   /**
-   * 等这一句的地址和音频，最多 `INFLIGHT_WAIT_MS`。单元 3 刚从草稿开出来的那一关还没记下出处（回合
-   * 终态时才有），这时它的句子没有地址：先等地址登记上，再等音频，总共不超过上限。
+   * 等这一句的地址和音频，最多 `INFLIGHT_WAIT_MS`。单元 3 刚从草稿开出来的那一关还没记下出处（流里有了这一关
+   * 的卡才有；再晚就是回合终态），这时它的句子没有地址：先等地址登记上，再等音频，总共不超过上限。
    */
   const resolveUrl = useCallback(
     async (text: string): Promise<string | null> => {

@@ -8,6 +8,9 @@
  *   浏览器只告诉服务端「哪个会话的哪一轮出的题、第几道」，要念的文字由服务端从那一轮的
  *   `present_lesson` 里取（约束 1，见 `reader-guard.ts`），所以这里拼的是题的坐标，不是文字。
  * 两边都取不到时，页面退到浏览器本机语音并在题卡上标明。
+ * 单元 3 一开始出题，页面还会先让站点把朗读会话建好（`requestReaderPrewarm`）。
+ * 出题回合还在跑时只取首句（`prefetchClips`）：题一出现就要念的是它，等回合终态再取会把出题
+ * 收尾那几秒算进它的等待里。
  *
  * lib/course 下的模块互不做值导入：清单是 JSON，题的类型只引类型。
  */
@@ -15,7 +18,7 @@
 import manifest from "./units/audio.json" with { type: "json" };
 import type { LessonContent } from "./english-lesson";
 
-/** 单元 3 那一关是哪个会话的哪一轮出的（`useLessonChannel` 在回合终态时记下，随本机存储一起存）。 */
+/** 单元 3 那一关是哪个会话的哪一轮出的（`useLessonChannel` 记下，回合终态后随本机存储一起存）。 */
 export interface LessonOrigin {
   sessionId: string;
   turnId: string;
@@ -47,6 +50,26 @@ export function runtimeClipSrc(origin: LessonOrigin, index: number): string {
   return `/api/course/audio?${q.toString()}`;
 }
 
+/** 预建朗读会话的站点路由（`app/api/course/reader-prewarm/route.ts`）。 */
+export const READER_PREWARM_PATH = "/api/course/reader-prewarm";
+
+/**
+ * 让站点把这个 coach 会话的朗读会话先建好。只报会话 id；发不出去、站点拒了都不抛——预建没成，取音时站点
+ * 照旧懒建。返回响应的状态码（发不出去是 0），只给页面的计时读数用。
+ */
+export async function requestReaderPrewarm(sessionId: string, fetchImpl: typeof fetch = fetch): Promise<number> {
+  try {
+    const res = await fetchImpl(READER_PREWARM_PATH, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sessionId }),
+    });
+    return res.status;
+  } catch {
+    return 0;
+  }
+}
+
 /** 一关里要念的每一句：听音选词的 `audio_text`、跟读的 `text`。预生成过的那句优先用静态文件。 */
 export function lessonClips(content: Pick<LessonContent, "exercises"> & { origin?: LessonOrigin }): Clip[] {
   const clips: Clip[] = [];
@@ -58,4 +81,16 @@ export function lessonClips(content: Pick<LessonContent, "exercises"> & { origin
     else clips.push({ text, src: content.origin ? runtimeClipSrc(content.origin, index) : null, kind: "runtime" });
   });
   return clips;
+}
+
+/**
+ * 这一关现在该预取哪几句。
+ * - 到齐了（回合终态、静态关、本机存下的）：全部，`useSpeech` 按题序取。
+ * - 回合还在跑（`complete` 为 false）：只取首句。这时的地址指向一轮没结束的回合，站点从工具已经收下的那次
+ *   调用里取字、回 `no-store`；其余几句等终态再取（顺序照旧）——没结束的回合里多取一句，
+ *   万一这一版后来被换掉就白耗一句限速额度。
+ */
+export function prefetchClips(content: Pick<LessonContent, "exercises" | "complete"> & { origin?: LessonOrigin }): Clip[] {
+  const clips = lessonClips(content);
+  return content.complete ? clips : clips.slice(0, 1);
 }

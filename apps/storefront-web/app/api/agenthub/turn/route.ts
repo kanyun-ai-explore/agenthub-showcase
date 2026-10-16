@@ -1,5 +1,5 @@
 import { PilotPlatformApiError } from "@kanyun-ai-infra/agenthub";
-import { getAgentHubClient, isAgentHubConfigured } from "@/lib/agenthub/client";
+import { getAgentHubClient, isAgentHubReachable } from "@/lib/agenthub/client";
 import { ownsSession, sessionNotFound } from "@/lib/agenthub/session-binding";
 import { settledTurnBody, waitForTurnWithin } from "@/lib/agenthub/turn-wait";
 import { errorResponse } from "@/lib/backend/errors";
@@ -12,6 +12,12 @@ import { errorResponse } from "@/lib/backend/errors";
  * `/api/agenthub/turn-result` for the rest. A request held open for the whole turn is cut by
  * the reverse proxy in front of the site at 60 s, and a shopping first turn runs ~54 s.
  *
+ * `wait: false` in the body skips the wait: the turn is dispatched and
+ * `{ status: "pending", turnId }` comes back at once. Only the English lesson's 出题 turn
+ * sends it — the page needs that turn's id while the turn is still running, to fetch the first
+ * clip of the lesson early (`/api/course/audio`). Absent, or any other value, the route waits
+ * as described above.
+ *
  * The cards come out of THIS turn (see `lib/agenthub/turn-parts.ts`): under
  * `CMA_UI_DELIVERY=result_text` the enriched envelope is the `present_*` tool's own
  * result, so no inbound call from the sandbox is involved. The separate
@@ -20,13 +26,14 @@ import { errorResponse } from "@/lib/backend/errors";
  */
 export async function POST(req: Request) {
   const startedAt = Date.now();
-  if (!isAgentHubConfigured()) {
+  if (!isAgentHubReachable()) {
     return Response.json({ error: "not_configured" }, { status: 501 });
   }
   try {
-    const { agentHubSessionId, text } = (await req.json()) as {
+    const { agentHubSessionId, text, wait } = (await req.json()) as {
       agentHubSessionId: string;
       text: string;
+      wait?: unknown;
     };
     // 归属：不是这个浏览器建的会话一律 404，在调平台之前（lib/agenthub/session-binding.ts）。
     if (!ownsSession(req, agentHubSessionId)) return sessionNotFound();
@@ -35,6 +42,8 @@ export async function POST(req: Request) {
     if (turn.kind === "revival_in_progress") {
       return Response.json({ status: "revival_in_progress" });
     }
+    // 只认字面的 false：别的值（缺省、true、字符串）都照旧在这次请求里等。
+    if (wait === false) return Response.json({ status: "pending", turnId: turn.turnId });
     const settled = await waitForTurnWithin(client, agentHubSessionId, turn.turnId, {
       startedAt,
       signal: req.signal,

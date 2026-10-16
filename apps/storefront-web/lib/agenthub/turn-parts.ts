@@ -75,7 +75,7 @@ export function isKnownComponent(component: string): boolean {
   return KNOWN_COMPONENTS.has(component);
 }
 
-interface RawPart {
+export interface RawPart {
   type?: string;
   text?: unknown;
   toolName?: unknown;

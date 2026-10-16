@@ -61,7 +61,7 @@ import {
   type CourseState,
 } from "@/lib/course/course-store";
 import { summarize, type PlayerState, type PlayerSummary } from "@/lib/course/lesson-player";
-import { lessonClips } from "@/lib/course/course-audio";
+import { prefetchClips } from "@/lib/course/course-audio";
 import { sfx } from "@/lib/course/sfx";
 import { finishLesson, readProgress, XP_PER_LESSON, type CourseProgress } from "@/lib/showcase/progress";
 import { EnStatusBar } from "./english/EnIcons";
@@ -126,11 +126,14 @@ function storedContent(course: CourseState, levelId: string): LessonContent | nu
 export function EnglishCourseApp({
   conversation,
   background = null,
+  backgroundFallback = null,
   visitorId,
 }: {
   conversation: Conversation;
-  /** 第二个 coach 会话：专跑单元 3 的后台出题。不传就是单会话，出题和讲解排一个队。 */
+  /** 第二个会话：专跑单元 3 的后台出题。不传就是单会话，出题和讲解排一个队。 */
   background?: Conversation | null;
+  /** 第二个会话是出题 agent 时，它坏了退到的第二个 coach 会话。 */
+  backgroundFallback?: Conversation | null;
   /** XP / 连胜 / 通关按这个身份分键；还没拿到身份时读写都空转。 */
   visitorId: string | null;
   /** CaseStage 对所有上课界面统一传的几项；路径图版不用（没有欢迎屏和开场白按钮）。 */
@@ -139,7 +142,7 @@ export function EnglishCourseApp({
   teacherName?: string;
   welcomeText?: string;
 }) {
-  const channel = useLessonChannel(conversation, background);
+  const channel = useLessonChannel(conversation, background, backgroundFallback);
   const speech = useSpeech();
   const [progress, setProgress] = useState<CourseProgress | null>(null);
   const [course, setCourseState] = useState<CourseState>(() => readCourse(null));
@@ -216,15 +219,16 @@ export function EnglishCourseApp({
   }, [channel.lessons, setCourse]);
 
   // 读音预取：路径图上亮着的那一关、通道里出好的单元 3 各关，题一到手就取，开关时多半已经在本地了。
-  // 单元 3 那一关回合终态时才记下出处（`origin`），出处到了要再预取一次（键里带上它）。
+  // 单元 3 那一关的出处（`origin`）到了要再预取一次，回合到终态（`complete`）还要再来一次（键里带上这两样）：
+  // 回合还在跑时只取首句，终态后取全部（`prefetchClips`）。
   const prefetched = useRef(new Set<string>());
   const { prefetch } = speech;
   const prefetchContent = useCallback(
     (content: LessonContent) => {
-      const key = `${content.lessonId}:${content.exercises.length}:${content.origin?.turnId ?? ""}`;
+      const key = `${content.lessonId}:${content.exercises.length}:${content.origin?.turnId ?? ""}:${content.complete ? "all" : "first"}`;
       if (prefetched.current.has(key)) return;
       prefetched.current.add(key);
-      void prefetch(lessonClips(content));
+      void prefetch(prefetchClips(content));
     },
     [prefetch],
   );

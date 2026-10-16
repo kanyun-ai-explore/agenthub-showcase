@@ -1,4 +1,4 @@
-import { getAgentHubClient, isAgentHubConfigured } from "@/lib/agenthub/client";
+import { getAgentHubClient, isAgentHubReachable } from "@/lib/agenthub/client";
 import { ownsSession, sessionNotFound } from "@/lib/agenthub/session-binding";
 
 /**
@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(req: Request) {
-  if (!isAgentHubConfigured()) {
+  if (!isAgentHubReachable()) {
     return Response.json({ error: "not_configured" }, { status: 501 });
   }
   const url = new URL(req.url);

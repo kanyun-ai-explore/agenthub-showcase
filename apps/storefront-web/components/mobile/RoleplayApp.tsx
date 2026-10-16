@@ -24,6 +24,7 @@ import { buildTurnTimingReport, type TurnTimingMark } from "@/lib/agenthub/turn-
 import { foldRoleplayScript, type ScriptTurn } from "@/lib/course/roleplay-script";
 import { summarizeRoleplay, type RoleplayRound } from "@/lib/course/roleplay-summary";
 import { finishRoleplay, readRoleplay, type RoleplayProgress } from "@/lib/showcase/progress";
+import { VOICE_DEGRADED, VOICE_NOTICE } from "@/lib/showcase/voice-status";
 import { EnStatusBar } from "./english/EnIcons";
 import { Octo } from "./Octo";
 import { useVoiceTake } from "./useVoiceTake";
@@ -32,12 +33,15 @@ import { useVoiceTake } from "./useVoiceTake";
 const MAX_ROUNDS = 4;
 const EARLY_EXIT_ROUND = 3;
 
-/** 每轮的「参考说法」：页面自己写的脚手架（不是 agent 的话），卡住时看一眼。 */
+/**
+ * 每轮的「参考说法」：页面自己写的脚手架（不是 agent 的话），卡住时看一眼。
+ * 用的是小结卡句型表里的说法（`lib/course/roleplay-summary.ts`），照着说就能在小结卡上点亮。
+ */
 const ROUND_HINTS = [
-  "试着说：I would like a coffee, please.",
-  "试着说：Hot, please. / Iced, please.",
-  "试着说：No, thank you. / Yes, a cake, please.",
-  "试着说：Here you are. Thank you!",
+  "试着说：I'd like a latte, please. / Can I get a cappuccino?",
+  "试着说：Iced, please. / A medium, please.",
+  "试着说：For here, please. / Could I have a muffin?",
+  "试着说：Can I pay by card?",
 ];
 
 /**
@@ -412,6 +416,18 @@ export function RoleplayApp({
     },
   });
 
+  /**
+   * 点「看小结」：小结卡盖住对话，店员那句还在放的话一起停——卡上没有能停它的地方。走 `stopPlayback`
+   * 同一条路：被停的这次不补播，欠着的那句也不补、时刻照样上报。按住说话还没松手就点的（另一根
+   * 手指），这一段不发、麦克风马上关。第 4 轮说完自动出小结卡那条路（`onTake` 末尾）不动，按那里
+   * 原注释的意思，是等店员那句回复落定再出小结卡。
+   */
+  const openSummary = useCallback(() => {
+    stopPlayback();
+    voice.cancel();
+    setSummaryOpen(true);
+  }, [stopPlayback, voice.cancel]);
+
   // 收尾：小结卡一出就把这一次记进本机（`awarded` 是去重闸，不是显示值）。
   useEffect(() => {
     if (!summaryOpen || awarded) return;
@@ -507,7 +523,7 @@ export function RoleplayApp({
             </div>
           ) : null}
           {startedOnce && studentTurns >= EARLY_EXIT_ROUND ? (
-            <button type="button" className="en-btn" onClick={() => setSummaryOpen(true)} disabled={conversation.busy}>
+            <button type="button" className="en-btn" onClick={openSummary} disabled={conversation.busy}>
               聊得差不多了，看小结卡 →
             </button>
           ) : null}
@@ -534,6 +550,11 @@ export function RoleplayApp({
             <span className="en-hold-dot" />
             {holdLabel}
           </button>
+          {VOICE_DEGRADED ? (
+            <div className="en-voice-down" role="status">
+              {VOICE_NOTICE}
+            </div>
+          ) : null}
           {voice.notice ? <div className="en-read-notice">{voice.notice}</div> : null}
           {voice.error ? (
             <div className="rp-explain" data-correct="false">

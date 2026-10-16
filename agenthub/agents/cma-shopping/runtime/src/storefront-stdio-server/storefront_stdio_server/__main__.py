@@ -20,6 +20,10 @@ Design notes (reproduction plan §4):
   via ``jsonschema`` — which is exactly CMA's own registry contract, unchanged.
   This is the one deliberate choice that makes "expose the executor's dispatch
   table" ~150 lines instead of ~20 hand-written per-tool wrappers.
+- **search_products** runs through ``search.StorefrontToolExecutor``, a subclass of the
+  unmodified ``ShoppingToolExecutor`` that changes what a price-filtered search and a
+  query with no English word return (see that module), and publishes its own
+  description for the tool. Every other handler is CMA's.
 - **Registration surface**: every registry tool except ``load_skill`` (Claude
   Code's native ``Skill`` tool replaces it — same substitution CMA's own Agent SDK
   runtime makes), presentation tools included. ``get_preferences`` and
@@ -76,11 +80,12 @@ from shopping_agent import (
     ShoppingSessionState,
     StorefrontBackend,
 )
-from shopping_agent.executor import ShoppingToolExecutor, build_memory
+from shopping_agent.executor import build_memory
 from shopping_agent.tools.registry import INLINE_CONTEXT_DESCRIPTIONS, build_tools
 
 from .http_backend import HttpStorefrontBackend
 from .http_memory import HttpMemoryStore
+from .search import SEARCH_DESCRIPTION, StorefrontToolExecutor
 
 logger = logging.getLogger("storefront_stdio_server")
 
@@ -233,6 +238,12 @@ def _tool_contracts(config: ShoppingAgentConfig) -> dict[str, Any]:
     for name, description in INLINE_CONTEXT_DESCRIPTIONS.items():
         if name in contracts:
             contracts[name] = {**contracts[name], "description": description}
+    # This deployment's search handler (search.py) changes what a price filter returns;
+    # its description says so, and asks for English queries.
+    contracts["search_products"] = {
+        **contracts["search_products"],
+        "description": SEARCH_DESCRIPTION,
+    }
     contracts.pop(LOAD_SKILL, None)
     return contracts
 
@@ -307,7 +318,7 @@ async def _run() -> None:
         backend = _build_backend(active_client, user_id=session.user_id)
         memory = build_memory(config, _build_memory_store(active_client))
 
-        executor = ShoppingToolExecutor(
+        executor = StorefrontToolExecutor(
             backend=backend,
             config=config,
             skills=SkillRegistry([]),

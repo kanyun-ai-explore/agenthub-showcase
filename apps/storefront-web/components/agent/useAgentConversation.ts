@@ -32,7 +32,7 @@ import {
 } from "@/lib/agenthub/turn-result-poll";
 import { asStreamChunk, type StreamFrame } from "@/lib/agenthub/stream-chunks";
 import { clearPrewarmHandle, readPrewarmHandle } from "@/lib/agenthub/prewarm-handle";
-import { ensureVisitor, noteVisitorTag } from "@/lib/showcase/visitor";
+import { ensureVisitor, postAgentSession } from "@/lib/showcase/visitor";
 import type { CapabilitySignal } from "@/lib/showcase/capabilities";
 
 /** 跨 agent 预热事件：prewarm-hit / prewarm-miss 由本 hook 在 start() 里发出；
@@ -82,8 +82,13 @@ export type Message =
       /**
        * 这一轮在平台上的 turnId（终态响应里就有）。页面上要按轮取**回合音频**时用它
        * ——情景对话里 agent 的每一句话都要能被播出来/重听；不取音频的页面不用管它。
+       * `ask` 带了 `earlyTurnId` 的回合（英语小课的出题）派发完就有，这时消息还在流。
        */
       turnId?: string;
+      /** 终态里的工具调用（带入参），`settledAgentMessage` 写进来。今天没有页面读它，页面上的工具轨迹画的是 `trace`。 */
+      toolCalls?: { id: string; name: string; shortName: string; input?: unknown; failed: boolean }[];
+      /** 这一轮的记忆召回状态（平台回合对象的 `memoryRecall.state`）。 */
+      memoryRecall?: string | null;
     };
 
 export type SessionPhase =
@@ -146,8 +151,12 @@ export interface Conversation {
   error: string | null;
   start: () => void;
   send: (text: string) => void;
-  /** 发一轮文字、等它终态、把结果交回来。有回合在飞时直接回 `SESSION_TURN_IN_PROGRESS`。 */
-  ask: (text: string) => Promise<AskOutcome>;
+  /**
+   * 发一轮文字、等它终态、把结果交回来。有回合在飞时直接回 `SESSION_TURN_IN_PROGRESS`。
+   * `earlyTurnId`：派发完立刻拿回合 id（`/api/agenthub/turn` 带 `wait: false`），记在正在流的
+   * 那条 agent 消息的 `turnId` 上，终态照旧从 turn-result 取。默认不带，行为和原来一样。
+   */
+  ask: (text: string, options?: { earlyTurnId?: boolean }) => Promise<AskOutcome>;
   /** 语音回合（跟读）：一段录好的音走站点自己的 /api/agenthub/voice-turn。 */
   sendVoice: (take: VoiceTake) => Promise<VoiceTurnOutcome>;
 }
@@ -301,32 +310,22 @@ export function useAgentConversation({
             }
           }
         }
-        const res = await fetch("/api/agenthub/session", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            agent,
-            chatSessionId: chatSessionIdRef.current,
-          }),
+        // 建会话和 `/api/visitor` 排同一队（`lib/showcase/visitor.ts`）：购物侧在这个响应里把访客 cookie 换成平台
+        // EUID，代号也在队里跟着换。
+        const { status, data } = await postAgentSession({
+          agent,
+          chatSessionId: chatSessionIdRef.current,
         });
-        if (res.status === 501) {
+        if (status === 501) {
           setPhase("unconfigured");
           return;
         }
-        const data = (await res.json()) as {
-          agentHubSessionId?: string;
-          status?: string;
-          visitorTag?: string;
-          detail?: string;
-        };
         if (!data.agentHubSessionId) {
           setPhase("error");
           setError(data.detail ?? "会话创建失败");
           return;
         }
         setSessionId(data.agentHubSessionId);
-        // 购物会话采纳平台 EUID 后访客身份换成了 EUID，代号跟着换。
-        if (data.visitorTag) noteVisitorTag(data.visitorTag);
         signal("session-created", data.agentHubSessionId);
         // A session leased from the prewarming pool is `ready` in the create response
         // itself; there is nothing to poll for (the platform has no readiness push —
@@ -544,7 +543,7 @@ export function useAgentConversation({
   // ── sending ─────────────────────────────────────────────────────────────────
 
   const dispatch = useCallback(
-    async (text: string, sid: string, { requeueOnRevival = true } = {}): Promise<AskOutcome> => {
+    async (text: string, sid: string, { requeueOnRevival = true, earlyTurnId = false } = {}): Promise<AskOutcome> => {
       const agentMessageId = nextId();
       pendingIdRef.current = agentMessageId;
       setBusy(true);
@@ -565,12 +564,19 @@ export function useAgentConversation({
             const res = await fetch("/api/agenthub/turn", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ agentHubSessionId: sid, text }),
+              body: JSON.stringify({ agentHubSessionId: sid, text, ...(earlyTurnId ? { wait: false } : {}) }),
             });
             return { httpStatus: res.status, body: (await res.json()) as TurnResult };
           },
           read: (turnId) => readTurnResult(sid, turnId),
           now: Date.now,
+          // 回合还在跑就把它的 id 记到正在流的那条消息上（只有带了 `earlyTurnId` 的回合）。
+          ...(earlyTurnId
+            ? {
+                onDispatched: (turnId: string) =>
+                  setMessages((prev) => prev.map((m) => (m.id === agentMessageId && m.role === "agent" ? { ...m, turnId } : m))),
+              }
+            : {}),
         });
 
         if (step.kind === "session_lost") {
@@ -785,7 +791,7 @@ export function useAgentConversation({
   );
 
   const ask = useCallback(
-    async (text: string): Promise<AskOutcome> => {
+    async (text: string, { earlyTurnId = false }: { earlyTurnId?: boolean } = {}): Promise<AskOutcome> => {
       const trimmed = text.trim();
       if (!trimmed) return { ok: false, code: "bad_request", error: "空消息" };
       if (pendingIdRef.current) {
@@ -793,7 +799,7 @@ export function useAgentConversation({
       }
       if (phase !== "ready" || !sessionId) return { ok: false, code: "SESSION_NOT_READY", error: "会话还没就绪" };
       push({ role: "user", id: nextId(), text: trimmed });
-      return dispatch(trimmed, sessionId, { requeueOnRevival: false });
+      return dispatch(trimmed, sessionId, { requeueOnRevival: false, earlyTurnId });
     },
     [dispatch, phase, push, sessionId],
   );
