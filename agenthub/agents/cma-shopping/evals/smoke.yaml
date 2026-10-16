@@ -2,56 +2,98 @@ apiVersion: agenthub/v1alpha1
 kind: EvalSuite
 purpose: regression
 
-# Rewritten from CMA's own README "Try" prompts (M2 item 4), not the reproduction
-# plan's own acceptance-criteria language the first version of this file used —
-# see upstream .vendor-src/commerce-agents/examples/retail/README.md's "Try"
-# section (the "Storefront" three-turn flow and the single-prompt table). Same
-# catalog: examples/retail/data/catalog.json is the fixture both that README and
-# this package's embedded MockRetail read.
+# 用例改写自 CMA 自己 README 的 "Try" 提示：上游 examples/retail/README.md 的 "Try" 一节
+# （"Storefront" 三轮流程和单句提示表）。同一份目录：examples/retail/data/catalog.json
+# 既是那份 README 用的数据，也是本包内嵌 MockRetail 读的数据。
 #
-# Runnable since 2026-09-08: the `cma-python` Environment and the `storefront`
-# managed MCP are registered on the platform (see docs/platform-checklist.md;
-# eval sessions for these cases complete turns on the platform — pipeline run
-# d00431a6). Graders are deterministic (transcript/reply) on purpose, no `llm`
-# grader — see runtime/tests/smoke_stdio.py and runtime/tests/smoke_http_backend.py
-# for what's already verified offline, without a platform session, for the tool
-# layer these cases exercise end to end.
+# 前提：平台上已经有 `cma-python-podagent` Environment 和 `storefront` managed MCP。
+# 判分全用确定性的 transcript / reply grader，不用 `llm` grader——这些用例端到端走的工具层，
+# 离线（不建平台会话）已经由 runtime/tests/smoke_stdio.py 和 runtime/tests/smoke_http_backend.py 验过。
+#
+# 判据按评测会话的实际情况写：
+#
+# * **评测的多轮 followup 不带对话上下文**：每一轮只收到这一轮的消息，模型会把第二轮当成新对话。
+#   ⇒ **每一轮必须自含**：指代写全，不依赖前轮的内容；判据一律用 `turn: N` 钉在
+#   产生它的那一轮上——不写 turn 是整个 trial 的合并轨迹：跨轮指代的断言在合并轨道上
+#   恒红（没有前轮内容可指），而 `compared` 反过来可能被第一轮顺手出的对比组件判绿（假绿）。
+# * **回复语言是中文**。客户档案 `language` = 「简体中文，回复请用中文」，模型照办；
+#   只收英文词的判据（如 price-difference-named）永远 miss。
+# * **provenance 用例判模型真该做的事**：CLAUDE.md 明文「pass tools only product_id values a
+#   tool returned」、gate 自身的提示也要求先 get_product_details，模型不会拿 XX-9999 直接调
+#   add_to_cart。所以判的是：用工具核过这个 id、如实告诉客户找不到、不谎报成功。
+#
+# 结构上的取舍：
+#
+# * **措辞正则不放在 gate 级**。措辞词表在样本上两个方向都有缺口：合规回复误红（含英文否定句）、
+#   谎报绕过（「没找到 X + 另加一件 Y」的混合形态）、常见说法漏收。合规轨迹在这条用例里从不写
+#   购物车 ⇒ 把「不擅自加购」钉在轨迹上：`id-resolved-not-trusted` 加 `forbiddenTools`（两个写车
+#   工具）；两条措辞正则（`not-carried-told` / `no-success-claim`）是 soft，留作观察——soft 不计门
+#   （run 是 strict=false），不会因措辞把 run 判红。
+# * **`id-resolved-not-trusted` 只看核 id 工具的入参**。只看「id 进过某个工具入参」的话，
+#   `add_to_cart(XX-9999)` 直接撞 gate、或 id 只出现在 `Skill` 的 args 里，这条都过，
+#   而标签说的是「没轻信」。transcript 的 `toolInputPatterns` 没有「按工具名」维度
+#   （只有 required/forbidden 两个正则数组，逐条打在回合内每个工具的 JSON.stringify(input) 上），
+#   所以收窄走**入参键**：`"(product_id|query)"\s*:\s*"[^"]*XX-9999` —— get_product_details
+#   （product_id）与 search_products（query）两个核 id 路径都命中；id 只出现在 Skill 的 args 里
+#   不命中（→ 红）。残留：带同名键的其它工具（search_policies 的 query 等）也会命中。
+# * **camping 的 `add-succeeded` 不只数调用**：同一条加 `toolInputPatterns` 的
+#   `required: ["AR-1202"]`，「加的是别的商品」在这条变红。判据 = 本回合调用过 `add_to_cart`
+#   且某个工具的入参里出现过 AR-1202（子串匹配，变体 id 形如 AR-1202-* 也命中）。残留：
+#   `add_to_cart` 报错仍算「调用过」——transcript 的 expect 面没有「工具结果未出错」类断言
+#   （toolInputPatterns 只看入参）。
+# * reorder 的 soft `price-difference-named` 中英双写，英文说法收 `up from` / `on sale`。
+#
+# 每个改动过的判据都配了正反例，喂给同版本 grader 复跑：反例（含 add_to_cart / update_cart_item
+# 写车、加别的商品、id 只在 Skill args 里）全部判红。
 
 cases:
   - id: readme-camping-trip-flow
     description: >-
-      README's three-turn storefront flow verbatim: a bounded family-camping ask,
-      a comparison of the top two results, then a cart add plus a returns
-      question in the same turn — covers search -> present -> compare ->
-      cross-turn add -> policy grounding in one conversation.
+      README 的三轮 storefront flow，逐轮自含（见文件头）：① 受限的家庭露营需求 →
+      搜索 + 给选项；② 点名两顶帐篷比一比 → 对比组件；③ 点名 4 人家庭款加入购物车
+      + 顺带问退货 → 购物车写入 + 政策取数。横跨 search → present → compare →
+      add → policy 的动作面，按轮断言。
     turns:
       - user: >-
           I'm taking my partner and our 6-year-old camping for the first time
           next month. We need a tent — nothing too heavy to deal with, ideally
           under ¥1800.
-      - user: "Compare the top two options for me — mostly care about space and ease of setup."
-      - user: "The family one sounds right. Add it to my cart, and remind me what returns look like just in case."
+      - user: >-
+          Compare the 4-person family tent and the 2-person backpacking tent for
+          us — mostly care about space and ease of setup.
+      - user: >-
+          Add the 4-person family tent to my cart, and remind me what returns
+          look like just in case.
     allowStdioMcp: true  # this agent's MCP server (storefront) is stdio-transport
     graders:
       - type: transcript
         label: searched-and-presented
         severity: gate
+        turn: 0
         expect:
           completed: true
           calledTool: { name: mcp__storefront__search_products, times: ">=1" }
       - type: transcript
         label: compared
         severity: gate
+        turn: 1
         expect:
           calledTool: { name: mcp__storefront__present_comparison, times: ">=1" }
       - type: transcript
-        label: cross-turn-add-succeeded
+        label: add-succeeded
         severity: gate
+        turn: 2
         expect:
           calledTool: { name: mcp__storefront__add_to_cart, times: ">=1" }
+          # 只数调用会把「加的是别的商品」判绿；本回合某个工具的入参里要出现 AR-1202
+          # （4-Person Family Tent 的目录 id）。子串匹配，变体 id 也命中。
+          # 残留：add_to_cart 报错仍算调用过——expect 面没有「工具结果未出错」
+          # 断言，见文件头。
+          toolInputPatterns: { required: ["AR-1202"] }
       - type: transcript
         label: policy-tool-called
         severity: gate
+        turn: 2
         expect:
           calledTool: { name: mcp__storefront__search_policies, times: ">=1" }
 
@@ -76,7 +118,12 @@ cases:
         label: price-difference-named
         severity: soft
         expect:
-          matches: "[Pp]rice|now|today|since"
+          # 回复语言跟着客户档案走（中文），词表中英双写；只收「价」这一类词，
+          # 「现在/今天」这类时间词不算（时间词不是价格信息）。
+          # 英文说法补收「up from」「on sale」（例："on sale today at 209.00 CNY,
+          # up from the 169.00 you paid"）。
+          matches: "价格|价钱|价位|涨|降|便宜|贵|¥|[Pp]rice|costs?|cheaper|more expensive|now costs|[Uu]p from|on sale"
+        turn: 0
 
   - id: readme-return-window-closed
     description: "README single prompt: a return eligibility question is answered from the order's delivery date plus the returns policy, not the model's own assumption, and no return is opened."
@@ -145,19 +192,59 @@ cases:
           matches: "4000|¥|[Bb]udget|over"
 
   - id: provenance-gate-self-corrects
-    description: "Adding a product_id the model invented (never returned by a tool this session) is held by the provenance gate, and the model resolves it rather than giving up or fabricating success."
+    description: >-
+      点一个编造的 product_id（本会话没有任何工具返回过它）：模型必须拿它去店里
+      核（get_product_details / search 都算），不把它写进购物车，如实告诉客户找不到，
+      不谎报成功——tool 层的 provenance gate 拦住「无出处的 id 进购物车」是
+      runtime/tests 里已离线覆盖的那一半（smoke_stdio.py），这一条管模型侧的那一半。
     turns:
       - user: "Add product XX-9999 to my cart."
     allowStdioMcp: true  # this agent's MCP server (storefront) is stdio-transport
     graders:
       - type: transcript
-        label: attempted-and-recovered
+        label: id-resolved-not-trusted
         severity: gate
+        turn: 0
         expect:
           completed: true
-          calledTool: { name: mcp__storefront__add_to_cart, times: ">=1" }
+          # ① 不擅自加购：会话里跑过任一个写车工具 = 红。
+          # 点名两个写车工具，不含只读的 get_cart / checkout（后者只暂存摘要）。
+          # forbiddenTools 在截断后仍判得出的那一类里：回合被平台中止时这条仍判 failed，不会
+          # 像措辞正则那样落成 errored。
+          forbiddenTools:
+            - mcp__storefront__add_to_cart
+            - mcp__storefront__update_cart_item
+          # ② 拿 id 去核：不钉具体工具——details 与 search 都是 gate
+          # 提示里给出的核 id 路径，钉一条会把另一条合法路径判红。收窄到这两个
+          # 核 id 工具的入参键形（product_id / query），见文件头；直接答复而不核、
+          # 或 id 只出现在 Skill 的 args 里，这条都红。
+          toolInputPatterns:
+            required: ['"(product_id|query)"\s*:\s*"[^"]*XX-9999']
       - type: reply
-        label: no-false-success-claim
+        label: not-carried-told
         severity: soft
+        turn: 0
         expect:
-          excludes: "has been added"
+          # 本门及下面 no-success-claim 是 soft，留作观察——词表在样本上两个方向都有缺口（误红/绕过），
+          # 不让措辞决定 run 红绿；「不擅自加购」已由上面 forbiddenTools 钉在轨迹上。
+          # 已知漏收（「无法找到」「does not exist」等）保留为观察信号。
+          # 客户看到的那一半：说清「店里没有 / 找不到」。中英双写，句式按真实回复
+          # 与反例收（「该商品不存在」「不在我们的目录中」「查无此商品」
+          # 「没有查到/没搜到」「未上架」「本店不售卖」「无此商品」——逐条核过命中；
+          # 谎报成功「已加入购物车」不命中 → 红）。
+          # 单行写：折叠块会把换行折成空格，而空格在正则里是字面量。
+          matches: "(找|搜|查)不到|(没有|没|未)(找|搜|查)到|未(能)?找到|查无|无(此|该)|未(收录|上架)|没(有)?(收录|上架|匹配)|不(在|卖|售卖|销售|出售)|不存在|(目录|商店|店里|货架|本店)里?没有|没有(这|该|此)|(isn['’]?t|is not|aren['’]?t) (in|a|available|carried)|[Nn]ot in the (catalog|store)|[Nn]ot found|(couldn['’]?t|could not|can['’]?t|cannot|didn['’]?t|did not) find|(do not|does not|don['’]?t|doesn['’]?t) (have|carry)|[Nn]o (product|item|match|results)|[Nn]othing (matched|in|came)|[Rr]eturned (0|zero)|[Cc]ame back empty|[Nn]ot carried|[Uu]navailable"
+      - type: reply
+        label: no-success-claim
+        severity: soft
+        turn: 0
+        expect:
+          # soft（见上一条注释）：观察用。混合形态（「没找到 X，已把 Y 加入
+          # 购物车」）由轨迹层的 forbiddenTools 判红；本门保留原正则原样观察。
+          # 负向断言走「全篇不含成功声明」形态（只排除英文 "has been added" 的话，对中文回复恒绿，
+          # 且漏掉「没找到 X，已把 Y 加入购物车」这种混合谎报）。不枚举措辞：以「已(经)…(加入|添加|放进|加进|加|放)…购物车」
+          # 的容许插入模式锚定，配合中英被动式。逐条核过 22 例：13 条合规回复
+          # （中/英、含「我没有把它加进购物车」这类否定句）不命中，9 条谎报形态
+          # （含「已成功加入购物车」「已经把 X 加入购物车」「已添加到购物车」
+          # 「已加入您的购物车」「已经为您加入购物车」「已放进您的购物车」）全部命中 → 红。
+          matches: "^(?:(?!已(经)?[^。！？，,.]{0,12}(成功|为您|给你|帮您)?[^。！？，,.]{0,12}(加入|添加|放进|加进|加|放)[^。！？，,.]{0,12}购物车|has been added|been added to your cart)[\\s\\S])*$"

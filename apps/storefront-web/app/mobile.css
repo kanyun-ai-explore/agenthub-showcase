@@ -2507,6 +2507,146 @@
   min-width: 34px;
 }
 
+/* ── 自由对话（实时语音） ─────────────────────────────────────────────────── */
+
+.ft-stage {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  scroll-behavior: smooth;
+}
+.ft-stage > * { flex: none; }
+.ft-welcome { margin: auto 0; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.ft-welcome h3 { font-size: 19px; font-weight: 800; }
+.ft-welcome p { font-size: 13.5px; color: #777; line-height: 1.7; max-width: 260px; }
+.ft-openers { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; width: 100%; }
+.ft-opener {
+  border: 2px solid var(--m-line);
+  border-bottom-width: 4px;
+  background: #fff;
+  border-radius: 14px;
+  padding: 12px 16px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--en-blue);
+}
+.ft-opener:active { transform: translateY(2px); border-bottom-width: 2px; }
+
+.ft-state {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 2px solid #cfe9ff;
+  background: #f3faff;
+  color: var(--en-blue-dark);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.ft-state-dot { width: 9px; height: 9px; border-radius: 999px; background: currentColor; animation: ft-pulse 1.2s ease-in-out infinite; }
+.ft-state[data-state="thinking"] { border-color: #ffe0a3; background: #fff7e6; color: #a86a00; }
+.ft-state[data-state="speaking"] { border-color: #d9f2c2; background: #f7fff0; color: var(--en-green-dark); }
+.ft-state[data-state="connecting"] { border-color: var(--en-swan); background: #f7f7f7; color: #6a6a6a; }
+@keyframes ft-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.35; transform: scale(0.8); }
+}
+
+.ft-turn { display: flex; }
+.ft-turn[data-role="user"] { justify-content: flex-end; }
+.ft-bubble {
+  max-width: 86%;
+  border: 2px solid #cfe9ff;
+  background: #f3faff;
+  border-radius: 14px;
+  padding: 9px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ft-turn[data-role="user"] .ft-bubble { border-color: #d9f2c2; background: #f7fff0; }
+.ft-who { font-size: 11px; font-weight: 800; color: var(--en-blue-dark); letter-spacing: 0.04em; }
+.ft-turn[data-role="user"] .ft-who { color: var(--en-green-dark); }
+.ft-bubble p { font-size: 14px; line-height: 1.6; color: var(--m-text); white-space: pre-wrap; }
+.ft-replay {
+  align-self: flex-start;
+  margin-top: 2px;
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--en-blue-dark);
+  text-decoration: underline;
+}
+.ft-replay:disabled { color: var(--en-dim); text-decoration: none; }
+.ft-replay[data-playing="true"] { color: var(--en-dim); text-decoration: none; }
+
+.ft-explain {
+  margin-top: 12px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: #eef7ff;
+  color: #2c6ba0;
+}
+.ft-explain[data-correct="false"] { background: #ffdfe0; color: #c03434; }
+
+.ft-floor {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--m-line);
+  background: #fff;
+}
+.ft-limit { flex: none; padding: 0 14px 8px; text-align: center; background: #fff; }
+
+.ft-summary {
+  position: absolute;
+  inset: 44px 0 0;
+  z-index: 80;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  overflow-y: auto;
+  gap: 8px;
+  padding: 22px 20px 26px;
+  text-align: center;
+  animation: fade 0.25s ease;
+}
+.ft-summary > * { flex: none; }
+.ft-summary h3 { font-size: 22px; font-weight: 800; color: var(--en-green-dark); }
+.ft-summary-sub { font-size: 12px; color: var(--en-dim); line-height: 1.7; margin: 8px 0 4px; }
+.ft-summary .en-btn { max-width: 220px; }
+.ft-sum-block { width: 100%; text-align: left; display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.ft-sum-block > b { font-size: 12.5px; color: var(--en-dim); letter-spacing: 0.04em; }
+.ft-sum-empty { font-size: 12.5px; color: #8a8a8a; }
+.ft-review-text {
+  font-size: 13.5px;
+  line-height: 1.75;
+  color: var(--m-text);
+  background: #f7fff0;
+  border: 2px solid #d9f2c2;
+  border-radius: 12px;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+}
+.ft-transcript { display: flex; flex-direction: column; gap: 5px; }
+.ft-transcript p { font-size: 12.5px; line-height: 1.6; color: #4a4a4a; display: flex; gap: 6px; }
+.ft-transcript p[data-role="user"] { color: var(--en-green-dark); }
+.ft-transcript span { flex: none; font-weight: 800; font-size: 11.5px; color: var(--en-dim); min-width: 34px; }
+
 /* ── 小章鱼 ───────────────────────────────────────────────────────────────── */
 
 .octo { position: relative; display: inline-block; flex: none; }
@@ -2790,3 +2930,621 @@
 .wc-send:disabled {
   opacity: 0.45;
 }
+
+/* ── 团队群 · 脚本原型（界面照 Slack 画） ──────────────────────────
+ * 两套视觉不要混：Slack 的界面元素（消息、卡片、按钮）用 Slack 的中性色、茄紫和绿；回放加的
+ * 旁白（旁注、触点）用站点绿和虚线。 */
+
+.tc-app {
+  --m-bg: #ffffff;
+  --tc-ink: #1d1c1d;
+  --tc-dim: #616061;
+  --tc-line: #e3e2e3;
+  --tc-aubergine: #3f0e40;
+  --tc-blue: #1264a3;
+  --tc-green: #007a5a;
+  color: var(--tc-ink);
+}
+.tc-top {
+  flex: none;
+  background: var(--tc-aubergine);
+  color: #fff;
+}
+.tc-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px 10px;
+}
+.tc-back {
+  font-size: 28px;
+  line-height: 1;
+  margin-top: -4px;
+  opacity: 0.85;
+}
+.tc-head-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.tc-head-main b {
+  font-size: 16px;
+  font-weight: 700;
+}
+.tc-hash {
+  opacity: 0.7;
+  margin-right: 3px;
+  font-weight: 500;
+}
+.tc-head-main span {
+  font-size: 11.5px;
+  opacity: 0.74;
+}
+.tc-pin {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 1px 8px;
+  padding: 7px 14px;
+  background: #fdf6dd;
+  border-bottom: 1px solid #efe2b0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #6b5a1e;
+}
+.tc-pin b {
+  font-weight: 700;
+  color: #5a4500;
+}
+.tc-list {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 8px 0 10px;
+  display: flex;
+  flex-direction: column;
+}
+.tc-list > * {
+  flex: none;
+  position: relative;
+  animation: tc-in 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+/* 线程里的行：往里缩一格，左边一条竖线连到根消息的头像下方。 */
+.tc-list > [data-thread="true"],
+.tc-status {
+  padding-left: 46px;
+}
+.tc-list > [data-thread="true"]::before,
+.tc-status::before {
+  content: "";
+  position: absolute;
+  left: 31px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--tc-line);
+}
+.tc-msg {
+  display: flex;
+  gap: 10px;
+  padding: 7px 14px;
+}
+.tc-avatar {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+}
+.tc-avatar[data-who="bot"] {
+  background: #1f2a44;
+}
+.tc-avatar svg {
+  width: 21px;
+  height: 21px;
+}
+.tc-msg[data-thread="true"] .tc-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  font-size: 13px;
+}
+.tc-msg[data-thread="true"] .tc-avatar svg {
+  width: 18px;
+  height: 18px;
+}
+.tc-body {
+  flex: 1;
+  min-width: 0;
+}
+.tc-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  line-height: 1.3;
+}
+.tc-name b {
+  font-size: 14.5px;
+  font-weight: 700;
+}
+.tc-name time {
+  font-size: 11.5px;
+  color: var(--tc-dim);
+  font-variant-numeric: tabular-nums;
+}
+.tc-app-badge {
+  align-self: center;
+  padding: 1px 3px;
+  border-radius: 3px;
+  background: rgba(29, 28, 29, 0.1);
+  color: rgba(29, 28, 29, 0.66);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+.tc-text {
+  margin-top: 2px;
+  font-size: 14.5px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+.tc-text b {
+  font-weight: 700;
+}
+.tc-text code {
+  padding: 1px 4px;
+  border: 1px solid var(--tc-line);
+  border-radius: 3px;
+  background: #f8f8f8;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #c0134e;
+}
+.tc-em {
+  font-style: italic;
+  color: var(--tc-dim);
+}
+.tc-mention {
+  padding: 0 2px;
+  border-radius: 3px;
+  background: rgba(29, 155, 209, 0.12);
+  color: var(--tc-blue);
+}
+.tc-link {
+  color: var(--tc-blue);
+}
+.tc-reactions {
+  display: flex;
+  margin-top: 5px;
+}
+.tc-reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid rgba(29, 155, 209, 0.5);
+  border-radius: 999px;
+  background: rgba(29, 155, 209, 0.1);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tc-blue);
+  font-variant-numeric: tabular-nums;
+  animation: tc-pop 0.36s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.tc-reaction > span {
+  font-size: 14px;
+  line-height: 1;
+}
+.tc-replies {
+  margin-top: 5px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--tc-blue);
+}
+/* 线程底部的进度状态和 Stop：回合进行中才有。 */
+.tc-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 6px;
+  padding-right: 14px;
+  padding-bottom: 6px;
+  font-size: 13px;
+  color: var(--tc-dim);
+}
+.tc-spin {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-left: 8px;
+  border-radius: 999px;
+  border: 2px solid rgba(29, 28, 29, 0.16);
+  border-top-color: var(--tc-dim);
+  animation: spin 0.8s linear infinite;
+}
+.tc-status[data-pressed="true"] .tc-spin {
+  animation-play-state: paused;
+}
+.tc-status-text {
+  flex: 1;
+  min-width: 0;
+  background: linear-gradient(90deg, var(--tc-dim) 0 40%, #b9b8b9 50%, var(--tc-dim) 60% 100%) 0 0 / 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: tc-shimmer 1.6s linear infinite;
+}
+.tc-stop-mark {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: currentColor;
+}
+.tc-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid #bbbabb;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tc-ink);
+  transition:
+    transform 0.12s,
+    background 0.12s;
+}
+.tc-btn[data-pressed="true"] {
+  transform: scale(0.94);
+  background: #e6e6e6;
+}
+.tc-btn[data-style="primary"] {
+  border-color: var(--tc-green);
+  background: var(--tc-green);
+  color: #fff;
+}
+.tc-btn[data-style="primary"][data-pressed="true"] {
+  background: #005e46;
+}
+
+/* bot 消息下面的卡片：回执、PR 链接的展开、确认卡。左边一条色带，照 Slack 应用消息的样子。 */
+.tc-block {
+  margin-top: 6px;
+  padding: 8px 10px 9px;
+  border: 1px solid var(--tc-line);
+  border-left: 4px solid #bbbabb;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+  line-height: 1.45;
+  animation: tc-in 0.32s 0.12s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.tc-block[data-kind="confirm"] {
+  border-left-color: #ecb22e;
+  transition: border-color 0.25s;
+}
+.tc-block[data-kind="receipt"],
+.tc-block[data-kind="confirm"][data-approved="true"] {
+  border-left-color: #2eb67d;
+}
+.tc-block-meta {
+  font-size: 11.5px;
+  color: var(--tc-dim);
+}
+.tc-block-title {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+.tc-check-mark {
+  flex: none;
+  font-weight: 700;
+  color: var(--tc-green);
+}
+.tc-fields {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0 10px;
+  margin: 4px 0 0;
+}
+.tc-fields > div {
+  display: contents;
+}
+.tc-fields dt {
+  color: var(--tc-dim);
+}
+.tc-fields dd {
+  margin: 0;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+.tc-checks {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--tc-dim);
+}
+.tc-checks[data-passed="true"] {
+  color: var(--tc-green);
+  font-weight: 700;
+}
+.tc-checks .tc-spin {
+  width: 12px;
+  height: 12px;
+  margin-left: 0;
+}
+.tc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.tc-approved {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  margin-top: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--tc-green);
+  transform-origin: left center;
+  animation: tc-pop 0.36s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+/* 回放旁注：回放加的旁白，不是 Slack 的界面，也不是 bot 说的话。 */
+.tc-note-row {
+  display: flex;
+  justify-content: center;
+  padding: 5px 14px;
+}
+.tc-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  padding: 4px 11px 4px 4px;
+  border: 1.5px dashed color-mix(in oklch, var(--brand) 50%, white);
+  border-radius: 14px;
+  background: var(--brand-soft);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--brand-strong);
+  transition:
+    background 0.25s,
+    border-color 0.25s,
+    color 0.25s;
+}
+.tc-note[data-tone="quiet"],
+.tc-note[data-tone="plain"] {
+  border-color: #c4c4c4;
+  background: #f4f4f4;
+  color: var(--tc-dim);
+}
+.tc-note-tag {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: background 0.25s;
+}
+.tc-note[data-tone="quiet"] .tc-note-tag,
+.tc-note[data-tone="plain"] .tc-note-tag {
+  background: #8d8d8d;
+}
+.tc-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.tc-dots i {
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: currentColor;
+  animation: tc-dot 1s ease-in-out infinite;
+}
+.tc-dots i:nth-of-type(2) {
+  animation-delay: 0.15s;
+}
+.tc-dots i:nth-of-type(3) {
+  animation-delay: 0.3s;
+}
+.tc-note .tc-dots i:first-of-type {
+  margin-left: 3px;
+}
+.tc-typing .tc-dots i:last-of-type {
+  margin-right: 4px;
+}
+
+/* 成员去点按钮（Stop、批准）的触点：也是回放加的。挂在按钮正中，从右下移过来，按下时一圈涟漪。 */
+.tc-tap {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  z-index: 5;
+  pointer-events: none;
+  animation: tc-tap-in 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.tc-tap-dot {
+  position: absolute;
+  left: -13px;
+  top: -13px;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 2px solid var(--brand);
+  background: color-mix(in oklch, var(--brand) 34%, transparent);
+}
+.tc-tap[data-phase="press"] .tc-tap-dot {
+  animation: tc-tap-press 0.5s ease-out both;
+}
+/* 绿按钮上站点绿的圆点看不清，换成白的。 */
+.tc-btn[data-style="primary"] .tc-tap-dot {
+  border-color: #fff;
+  background: rgba(255, 255, 255, 0.42);
+}
+.tc-tap-who {
+  position: absolute;
+  right: 16px;
+  top: 12px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.tc-typing {
+  flex: none;
+  height: 22px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  font-size: 11.5px;
+  color: var(--tc-dim);
+}
+.tc-composer {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 12px 22px;
+  padding: 10px 12px;
+  border: 1px solid #cfcfcf;
+  border-radius: 10px;
+  background: #f8f8f8;
+  font-size: 13.5px;
+  color: #8f8f8f;
+}
+.tc-plus {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: #e4e4e4;
+  font-size: 15px;
+  line-height: 1;
+}
+
+/* 暂停 = 时钟停了，正在跑的 CSS 动画也跟着停。 */
+.tc-app[data-playing="false"] *,
+.tc-app[data-playing="false"] *::before {
+  animation-play-state: paused;
+}
+
+@keyframes tc-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@keyframes tc-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  60% {
+    transform: scale(1.12);
+  }
+}
+@keyframes tc-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+@keyframes tc-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -120% 0;
+  }
+}
+@keyframes tc-tap-in {
+  from {
+    opacity: 0;
+    transform: translate(44px, 38px) scale(1.25);
+  }
+}
+@keyframes tc-tap-press {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--brand) 45%, transparent);
+  }
+  25% {
+    transform: scale(0.72);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 14px transparent;
+  }
+}
+
+/* 减少动态效果：不滑入、不转圈、不闪、不画触点，每一行到点直接出现。 */
+@media (prefers-reduced-motion: reduce) {
+  .tc-app *,
+  .tc-app *::before {
+    animation: none !important;
+    transition: none !important;
+  }
+  .tc-status-text {
+    background: none;
+    color: var(--tc-dim);
+  }
+  .tc-tap {
+    display: none;
+  }
+}
+
+/* 语音降级提示（开关在 lib/showcase/voice-status.ts）：英语课一关的顶上、情景对话按住说话的下面、freetalk 回落后那句提示的下面 */
+.en-voice-down {
+  flex: none;
+  margin: 0 16px 6px;
+  border-radius: 12px;
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.6;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  background: var(--en-red-light);
+  color: var(--en-red-dark);
+}
+.en-focus + .en-voice-down { margin-top: 6px; }
+.rp-floor .en-voice-down { margin: 0; }
+.ft-stage .en-voice-down { margin: 0; }

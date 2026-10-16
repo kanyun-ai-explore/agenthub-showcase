@@ -8,16 +8,18 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { AgentKey } from "@/lib/agenthub/client";
 import type { Product } from "@/lib/backend/types";
 import {
   useAgentConversation,
   type Conversation,
+  type ConversationSignal,
   type PrewarmSignal,
 } from "@/components/agent/useAgentConversation";
 import { CAPABILITIES, type CapabilityId, type CapabilitySignal } from "@/lib/showcase/capabilities";
 import { PLATFORM_EXTENSIONS, type Scenario, type Surface } from "@/lib/showcase/cases";
 import { readPrewarmHandle, writePrewarmHandle } from "@/lib/agenthub/prewarm-handle";
-import { DOC_LINKS, GETTING_STARTED, repoFileHref } from "@/lib/showcase/links";
+import { GETTING_STARTED, docLinksFor, evidenceParts, repoFileLinkHref } from "@/lib/showcase/links";
 import { readLocalProgressKey, resetVisitor, useVisitorTag } from "@/lib/showcase/visitor";
 import { ShoppingApp } from "@/components/mobile/ShoppingApp";
 import { MerchantApp } from "@/components/mobile/MerchantApp";
@@ -25,6 +27,7 @@ import { WeChatApp } from "@/components/mobile/WeChatApp";
 import { ClassroomApp } from "@/components/mobile/ClassroomApp";
 import { EnglishCourseApp } from "@/components/mobile/EnglishCourseApp";
 import { RoleplayApp } from "@/components/mobile/RoleplayApp";
+import { FreeTalkApp } from "@/components/mobile/FreeTalkApp";
 import type { Lesson } from "@/lib/course/types";
 import { Footer } from "./Chrome";
 import { Code } from "./Code";
@@ -79,6 +82,9 @@ const STEPS: {
   },
 ];
 
+/** 「实现方式」那行的副标题：「三步，这个页面就是这样接入的」。按实际条数取词。 */
+const STEP_COUNT_WORD = ["零", "一", "二", "三", "四", "五"] as const;
+
 /** 微信会话页顶上显示的联系人。 */
 const CONTACT: Record<string, { name: string; tag: string }> = {
   "course-sales": { name: "小豆", tag: "课程顾问" },
@@ -118,11 +124,14 @@ export function CaseStage({
   surface,
   catalog,
   lesson,
+  backgroundAgent,
 }: {
   scenario: Scenario;
   surface: Surface;
   catalog?: CatalogSeed;
   lesson?: Lesson;
+  /** 英语小课第二个会话（后台出题）用的 agent；页面按环境变量算好传进来，没传就和主会话同一个 agent。 */
+  backgroundAgent?: AgentKey;
 }) {
   const [events, setEvents] = useState<LiveEvent[]>([]);
   const [tools, setTools] = useState<string[]>([]);
@@ -154,13 +163,22 @@ export function CaseStage({
 
   // 英语小课的第二个会话：只跑单元 3 的后台出题，讲解、跟读、单元点评留在主会话，两边互不排队。
   // 别的视角不传它；不调 start() 就不会建会话。
+  // 站点配了出题专用的 agent（edu-english-lesson-gen）就建在它上面，没配就和主会话同一个 agent。
   // 只把工具调用转给右栏（能力卡要亮），会话建好、预热这类信号不转，免得右栏的会话号换成它的。
+  const onBackgroundSignal = (signal: ConversationSignal, detail?: string) => {
+    if (signal === "tool-call" && detail) setTools((prev) => (prev.includes(detail) ? prev : [...prev, detail]));
+  };
   const background = useAgentConversation({
+    agent: backgroundAgent ?? surface.agent ?? "shopping",
+    usePrewarmHandle: false,
+    onSignal: onBackgroundSignal,
+  });
+  // 第二个会话建在出题 agent 上时的兜底：同一视角 agent（coach）的又一个会话，出题 agent 的会话建不起来、回合失败或
+  // 超时就退到它再出一次。只有用到时才建；没配出题 agent 时不传。
+  const backgroundFallback = useAgentConversation({
     agent: surface.agent ?? "shopping",
     usePrewarmHandle: false,
-    onSignal: (signal, detail) => {
-      if (signal === "tool-call" && detail) setTools((prev) => (prev.includes(detail) ? prev : [...prev, detail]));
-    },
+    onSignal: onBackgroundSignal,
   });
 
   // 跨 agent 预热：本会话就绪后，为同一访客预建 surface.prewarm 里那些 agent 的会话，
@@ -221,6 +239,8 @@ export function CaseStage({
     () => STEPS.filter((step) => !step.caps || step.caps.some((cap) => surface.capabilities.includes(cap))),
     [surface.capabilities],
   );
+  // 「实现方式」的步骤：视角自带整段（`Surface.steps`）就用它，没有就是全站那三步。
+  const implSteps = surface.steps ?? GETTING_STARTED;
   const first = events.length > 0 ? events[0].at : 0;
   const toolNames = useMemo(() => (tools.length > 0 ? tools.join(" · ") : null), [tools]);
   const status = statusOf(conversation, surface.capabilities.includes("sandbox"));
@@ -242,9 +262,11 @@ export function CaseStage({
           ) : surface.app === "classroom" ? (
             <ClassroomApp conversation={conversation} openers={surface.openers} lessonTitle={surface.lessonTitle ?? lesson?.title ?? "数学课"} teacherName={surface.teacherName} welcomeText={surface.welcomeText} />
           ) : surface.app === "english" ? (
-            <EnglishCourseApp conversation={conversation} background={background} openers={surface.openers} visitorId={localProgressKey} lessonTitle={surface.lessonTitle} teacherName={surface.teacherName} welcomeText={surface.welcomeText} />
+            <EnglishCourseApp conversation={conversation} background={background} backgroundFallback={backgroundAgent ? backgroundFallback : null} openers={surface.openers} visitorId={localProgressKey} lessonTitle={surface.lessonTitle} teacherName={surface.teacherName} welcomeText={surface.welcomeText} />
           ) : surface.app === "roleplay" ? (
             <RoleplayApp conversation={conversation} openers={surface.openers} visitorId={localProgressKey} sceneTitle={surface.lessonTitle} clerkName={surface.teacherName} welcomeText={surface.welcomeText} />
+          ) : surface.app === "freetalk" ? (
+            <FreeTalkApp conversation={conversation} openers={surface.openers} agentName={surface.teacherName} sceneTitle={surface.lessonTitle} welcomeText={surface.welcomeText} />
           ) : (
             <ShoppingApp
               conversation={conversation}
@@ -367,19 +389,25 @@ export function CaseStage({
           <section className="sec">
             <div className="sec-head">
               <h2>实现方式</h2>
-              <span>三步，这个页面就是这样接入的</span>
+              {/* 数词和后半句要拼成一个字符串再渲染：拆成两个文本节点的话，HTML 里会多出
+                  一个 `<!-- -->` 分隔符，其他视角的同一节跟改动前就不是逐字节相同了。 */}
+              <span>{`${STEP_COUNT_WORD[implSteps.length] ?? implSteps.length}步，这个页面就是这样接入的`}</span>
             </div>
-            <Code title={surface.agentFile} href={repoFileHref(surface.agentFile)}>
+            <Code title={surface.agentFile} href={repoFileLinkHref(surface.agentFile)}>
               {surface.snippet}
             </Code>
             <ol className="steps">
-              {GETTING_STARTED.map((step, index) => (
+              {implSteps.map((step, index) => (
                 <li className="step" key={step.title}>
                   <span className="step-n">{index + 1}</span>
                   <div className="step-body">
                     <h4>{step.title}</h4>
                     <p>{step.body}</p>
-                    {step.code ? <Code>{step.code}</Code> : null}
+                    {step.code ? (
+                      <Code title={step.file} href={step.file ? repoFileLinkHref(step.file) : undefined}>
+                        {step.code}
+                      </Code>
+                    ) : null}
                   </div>
                 </li>
               ))}
@@ -407,15 +435,26 @@ export function CaseStage({
               <span>文档、SDK 和本页面的源码</span>
             </div>
             <div className="links">
-              {DOC_LINKS.map((link) => (
-                <a className="link" key={link.href} href={link.href} target="_blank" rel="noreferrer">
-                  <div className="link-main">
-                    <b>{link.title}</b>
-                    <span>{link.sub}</span>
+              {/* agent 那几条是这个视角自己的定义和目录（首页和团队群给的是 agents 总目录）。 */}
+              {docLinksFor(surface).map((link) =>
+                link.href ? (
+                  <a className="link" key={link.title} href={link.href} target="_blank" rel="noreferrer">
+                    <div className="link-main">
+                      <b>{link.title}</b>
+                      <span>{link.sub}</span>
+                    </div>
+                    <span className="link-arrow">↗</span>
+                  </a>
+                ) : (
+                  // 公开仓里还没有这个路径：只显示路径，不给链接（链了是 404）。
+                  <div className="link" key={link.title} data-static="">
+                    <div className="link-main">
+                      <b>{link.title}</b>
+                      <span>{link.sub}</span>
+                    </div>
                   </div>
-                  <span className="link-arrow">↗</span>
-                </a>
-              ))}
+                ),
+              )}
             </div>
           </section>
 
@@ -426,26 +465,26 @@ export function CaseStage({
   );
 }
 
-/**
- * 能力卡片底下那行「出处」。只有以 `agenthub/` 开头的才是仓库路径，渲染成跳到公开仓库
- * 对应文件的链接；`a/b/agent.yaml + CLAUDE.md` 这种写法，后面的文件名落在前一个的目录里。
- * 其它出处（工具名、env 变量、模型名）是文案，原样输出。
- */
+/** 能力卡片底下那行「出处」：仓库路径渲染成跳到公开仓库对应文件的链接，怎么拆见 `evidenceParts`；其它出处原样输出。 */
 function Evidence({ text }: { text: string }) {
-  if (!text.startsWith("agenthub/")) return <>{text}</>;
-  const parts = text.split(" + ");
-  const dir = parts[0].slice(0, parts[0].lastIndexOf("/") + 1);
+  const parts = evidenceParts(text);
+  if (!parts) return <>{text}</>;
   return (
     <>
-      {parts.map((part, i) => (
+      {parts.map(({ part, label, href, note }, i) => (
         <span key={part}>
           {i > 0 ? " + " : null}
-          <a href={repoFileHref(part.includes("/") ? part : `${dir}${part}`)} target="_blank" rel="noreferrer">
-            {part}
-          </a>
+          {/* 公开仓里还没有这个文件的：只显示路径，不给链接（链了是 404）。 */}
+          {href ? (
+            <a href={href} target="_blank" rel="noreferrer">
+              {label}
+            </a>
+          ) : (
+            label
+          )}
+          {note ? ` · ${note}` : null}
         </span>
       ))}
     </>
   );
 }
-

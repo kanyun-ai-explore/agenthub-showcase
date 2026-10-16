@@ -5,10 +5,17 @@ purpose: capability
 # 能力：Emma 老师两个纯文字协议的回复质量——【为什么】讲得清不清、【结算】点
 # 评得具不具体。smoke 只断言「调没调工具、有没有中文」，语义质量交给 llm grader。
 #
-# judge 用 qwen3-vl-flash：同 `model` 服务、生产实证可用，≠ 被测
-# deepseek-v4-flash；跨厂商判分。
+# judge 用 model-glm-5.3-flashx：≠ 被测 deepseek-v4-flash。
+# 判官取 GLM 系，与被测不同系列；7 个 capability suite 用同一个判官。GLM 三档里选 flashx：单维度耗时最短，
+# 离判官调用的 120 s 超时最远（超时不重试，该 trial 记 errored）；model-glm-5.3、model-glm-5.3-flash 都慢一倍左右。
+# 换判分模型前先小流量验证：网关对具体模型的 tool-call 翻译质量因模型而异，能稳定回 1-5 整数档再换。
+# graderVersion 3：换了 judge，打分刻度跟着变——按平台的换尺机制主动声明，基线换新桶，
+# 趋势页会在换尺那一点自动加注解。
+# judgeModelService=model：判分通道显式声明，不借用被测 agent 的模型服务。
+
 defaults:
-  judgeModel: qwen3-vl-flash
+  judgeModelService: model
+  judgeModel: model-glm-5.3-flashx
 
 cases:
   - id: why-explanation-quality
@@ -32,7 +39,7 @@ cases:
         rubric: rubrics/protocol-reply-quality.md
         dimensions: [讲解针对性, 语言简明]
         threshold: 0.7
-        graderVersion: 1
+        graderVersion: 3
 
   - id: settlement-comment-quality
     description: >-
@@ -57,4 +64,4 @@ cases:
         rubric: rubrics/protocol-reply-quality.md
         dimensions: [讲解针对性, 语言简明]
         threshold: 0.7
-        graderVersion: 1
+        graderVersion: 3

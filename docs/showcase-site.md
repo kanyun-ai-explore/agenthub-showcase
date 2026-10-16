@@ -5,7 +5,7 @@
 后者是重点：这个页面唯一的说服力来自「页面上写的每一句都能核」，所以任何一处
 「声称」与「实测」对不上，都是这个页面最贵的 bug，比排版难看贵得多。
 
-线上演示部署在内网，公开仓库里不放地址；本地怎么跑见 README。
+演示站点的部署地址不在仓库里；本地怎么跑见 README。
 
 ## 页面是什么
 
@@ -50,8 +50,8 @@
 `sessions.streamEvents`，逐帧转给页面。`id:` 带 `seq`，浏览器自动重连时回填
 `Last-Event-ID` 续上——外层网关 60s 掐空闲连接、控制面 300s 主动关连接，两种都能恢复。
 
-chunk 结构记在 `lib/agenthub/stream-chunks.ts`，是从真实一轮抓下来的（808 条，
-test session `b1dda827`），不是照着类型猜的——SDK 把 `chunk` 标成 `unknown`。
+chunk 结构记在 `lib/agenthub/stream-chunks.ts`，是从真实一轮抓下来的（808 条），
+不是照着类型猜的——SDK 把 `chunk` 标成 `unknown`。
 抓出来最要紧的一件事：
 
 ```
@@ -104,7 +104,7 @@ merchant 的 `metrics` 卡就这么丢了一天。现在白名单不再决定是
 「所有人共用、且持久化」。eval 会话不传 `configValues`，于是继承 stdio server 自己的
 `demo-user` 默认值，开始读写线上演示的购物车。
 
-实测（eval run `9b867d0e`）：`readme-camping-trip-flow` 第三轮说「add the family one to
+一次评测里：`readme-camping-trip-flow` 第三轮说「add the family one to
 my cart」，模型调 `get_cart` 看到三件手工测试留下的无关商品，整轮都在问「是指键盘吗？
 还是弹力带？」，始终没调 `add_to_cart`。
 
@@ -130,13 +130,13 @@ my cart」，模型调 `get_cart` 看到三件手工测试留下的无关商品�
   退化成没有历史的 Guest——得让后端把「读走固定人设、写走每访客购物车」拆开。
 - **eval 之间也不隔离。** `eval-user` 的购物车在多次 eval 运行之间是延续的，
   第 N+1 次会看到第 N 次留下的东西。上面那个拆分能一并解决。
-- **eval суite 与当前模型不匹配。** 判据里有「恰好调用 1 次 `search_products`」这类精确
-  计数和回复正则；suite 是照着 CMA 自己的模型默认值（sonnet/opus 档）写的，这个部署跑的是
-  `deepseek-v4-flash` + `effort: low`。目前 2 个用例稳定挂在这上面
-  （`readme-single-search-no-clarification` 调了 2~3 次、`provenance-gate-self-corrects`
-  搜索 0 结果后没有自我纠正）。**没有绿的基线可比**——在这之前 suite 从未有过一次 6 个用例
-  全部被真正评估的运行（更早的几次全是 `infrastructureError`），所以不能说这是回归。
-  要么换模型档，要么重写判据——但**不能把判据放松到把当前行为钉成期望**。
+- **eval suite 曾与评测面现实不匹配（已按行为重写）。** 旧判据是照
+  「评测会话有跨轮上下文」和「回复是英文」写的：eval 的多轮 followup 只发新消息、不带前轮
+  内容（平台既有差异；站点真实链路才带前后文），而客户档案要求中文回复、CLAUDE.md 又明文
+  不许把工具没返回过的 product_id 传回去——于是 camping 的跨轮指代（「the top two」「the
+  family one」）与 provenance 的「先撞 gate 再自纠」两条用例恒红，且同一判据也会假绿。
+  重写后每一轮自含、判据按 `turn` 收窄、判行为不判措辞，每条 gate 配反例；跨轮引用那一类
+  只能在真实会话里观察，eval 侧不再声称覆盖它。
 - 商品图是按分类调色板 + 手绘图形生成的：固定数据集 87 件商品里只有 9 件有 `image_url`。
 - `CMA_ENABLE_DISCLOSURES` 仍然关着：后端的 `/api/backend/disclosure` 对所有 id 返回 `null`，
   开了会变成「工具注册了但每次调用都被拒」。要先写 disclosure 固定数据。

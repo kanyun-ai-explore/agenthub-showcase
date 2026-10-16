@@ -1,5 +1,5 @@
 import { PilotPlatformApiError } from "@kanyun-ai-infra/agenthub";
-import { getAgentHubClient, isAgentHubConfigured } from "@/lib/agenthub/client";
+import { getAgentHubClient, isAgentHubReachable } from "@/lib/agenthub/client";
 import { ownsSession, sessionNotFound } from "@/lib/agenthub/session-binding";
 import { errorResponse, httpStatusOf } from "@/lib/backend/errors";
 import { crossSiteRequest } from "@/lib/backend/guards";
@@ -31,7 +31,7 @@ function fail(status: number, code: string, detail?: string): Response {
 }
 
 export async function GET(req: Request) {
-  if (!isAgentHubConfigured()) {
+  if (!isAgentHubReachable()) {
     return Response.json({ error: "not_configured" }, { status: 501 });
   }
   if (crossSiteRequest(req)) return fail(403, "cross_origin_not_allowed");

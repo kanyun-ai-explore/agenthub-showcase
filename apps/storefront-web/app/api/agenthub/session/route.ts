@@ -1,9 +1,11 @@
 import {
   agentIdFor,
+  stageForAgent,
   envNameFor,
   getAgentHubClient,
   isAgentHubConfigured,
-  parseAgentKey,
+  requestedAgentKey,
+  unknownAgentResponse,
 } from "@/lib/agenthub/client";
 import { withSessionBinding } from "@/lib/agenthub/session-binding";
 import { errorResponse } from "@/lib/backend/errors";
@@ -103,7 +105,10 @@ export async function POST(req: Request) {
     chatSessionId?: string;
     agent?: unknown;
   };
-  const agent = parseAgentKey(body.agent);
+  // 带了 agent 字段而值不在表里（拼错的、已退役的、非字符串）：在这里拒掉，不往下走。
+  // 往下走的话它会被当成 shopping，领走一个购物预热池的槽位。见 `requestedAgentKey`。
+  const agent = requestedAgentKey(body.agent);
+  if (agent === null) return unknownAgentResponse();
 
   if (!isAgentHubConfigured(agent)) {
     return Response.json(
@@ -145,7 +150,7 @@ export async function POST(req: Request) {
     const session = await client.sessions.create({
       projectId: env.projectId,
       agentId,
-      stage: env.stage,
+      stage: stageForAgent(env, agent),
       preferPrewarmed: true,
     });
     // `status` is "ready" when the session came from the prewarming pool: the page

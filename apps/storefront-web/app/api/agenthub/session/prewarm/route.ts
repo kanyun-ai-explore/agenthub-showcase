@@ -3,7 +3,9 @@ import {
   envNameFor,
   getAgentHubClient,
   isAgentHubConfigured,
-  parseAgentKey,
+  requestedAgentKey,
+  stageForAgent,
+  unknownAgentResponse,
 } from "@/lib/agenthub/client";
 import { withSessionBinding } from "@/lib/agenthub/session-binding";
 import { errorResponse } from "@/lib/backend/errors";
@@ -36,7 +38,9 @@ export async function POST(req: Request) {
     return Response.json({ error: "cross_origin_not_allowed" }, { status: 403 });
   }
   const body = (await req.json().catch(() => ({}))) as { agent?: unknown };
-  const agent = parseAgentKey(body.agent);
+  // 带了 agent 字段而值不在表里：拒掉，不调平台。判法和 `POST /api/agenthub/session` 同一个（`requestedAgentKey`）。
+  const agent = requestedAgentKey(body.agent);
+  if (agent === null) return unknownAgentResponse();
 
   if (!isAgentHubConfigured(agent)) {
     return Response.json(
@@ -57,7 +61,7 @@ export async function POST(req: Request) {
     const session = await client.sessions.create({
       projectId: env.projectId,
       agentId,
-      stage: env.stage,
+      stage: stageForAgent(env, agent),
       user: { id: visitorId },
     });
     console.log(

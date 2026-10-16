@@ -60,6 +60,8 @@ export interface VoiceTakeController {
   /** 真正的按下 / 松手：接在 pointerdown / pointerup+cancel+leave 上。 */
   press: () => void;
   release: () => void;
+  /** 这一段不要了（挂断、出小结卡）：麦克风马上关，已经录的丢掉、不交出去。 */
+  cancel: () => void;
   clearMessages: () => void;
 }
 
@@ -90,6 +92,8 @@ export function useVoiceTake({
   const pressedRef = useRef(false);
   /** 已经有一次 `startRecording` 在跑（等权限 / 等轨道）——同步置位，才是真正的闸。 */
   const startingRef = useRef(false);
+  /** `cancel()` 停掉的录音：它的 stop 事件不再交出这一段。 */
+  const discardedRef = useRef(new WeakSet<MediaRecorder>());
   const aliveRef = useRef(true);
   /** onTake 每次渲染可能换引用，起点录那一下要取最新的。 */
   const onTakeRef = useRef(onTake);
@@ -202,6 +206,7 @@ export function useVoiceTake({
       });
       recorder.addEventListener("stop", () => {
         stream.getTracks().forEach((track) => track.stop());
+        if (discardedRef.current.has(recorder)) return;
         void finishTake();
       });
       recorderRef.current = recorder;
@@ -224,6 +229,26 @@ export function useVoiceTake({
     })();
   }, [disabled, finishTake, holdHint, phase, rateLimitedNotice, release, sessionId]);
 
+  /**
+   * 不要这一段了：挂断、出小结卡时调。手指还按着的话，页面上已经没有能松手的按钮（底栏换成了
+   * 点评卡 / 小结卡），不收的话录音会一直录到 55 s 自己收尾、照样发出去、回复照样放出来。
+   * 这里同步关掉麦克风的音轨，录音停掉但这一段不交出去；还在等麦克风权限的那一次，
+   * `pressedRef` 置 false 后它拿到流就会自己关掉、不开录。
+   */
+  const cancel = useCallback(() => {
+    pressedRef.current = false;
+    const recorder = recorderRef.current;
+    if (!recorder) return;
+    recorderRef.current = null;
+    discardedRef.current.add(recorder);
+    clearTimers();
+    if (recorder.state !== "inactive") recorder.stop();
+    recorder.stream.getTracks().forEach((track) => track.stop());
+    chunksRef.current = [];
+    setElapsedMs(0);
+    setPhase("idle");
+  }, [clearTimers]);
+
   const clearMessages = useCallback(() => {
     setError(null);
     setNotice(null);
@@ -237,6 +262,7 @@ export function useVoiceTake({
     notice,
     press,
     release,
+    cancel,
     clearMessages,
   };
 }

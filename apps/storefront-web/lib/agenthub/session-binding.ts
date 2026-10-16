@@ -104,6 +104,7 @@ const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
  * - 不看 `x-forwarded-proto`：部署在 TLS 终结的反向代理后面时，它到 pod 时不是 `https`——按它判，线上的 `Set-Cookie` 都不会带 Secure（实测）。
  * - 不看 `req.url`：`next start` 不带 `-H`（prod 就这么起）时，route handler 里的 `req.url` 恒为
  *   `http://localhost:<port>`，跟请求的 Host 无关（本机实测）。按它判，prod 也会被当成本机。
+ * - 不看 `X-Forwarded-Host`：网关不剥离时它由客户端填（同 `lib/backend/guards.ts`），带了它结果不变。
  * - prod 上 pod 收到的 Host 是公网主机名：跨站挡板「Origin 与 Host 比」那一支在 prod 上放行同源 Origin、挡住别的
  *   （`lib/backend/guards.ts`）。缺 Host 或解析不了的，一律带 Secure。
  * 伪造 Host 为 localhost，只会让发这个请求的人自己拿到一个不带 Secure 的 cookie；经网关也路由不到本服务。

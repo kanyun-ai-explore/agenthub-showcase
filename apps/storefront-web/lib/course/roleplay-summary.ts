@@ -19,7 +19,7 @@ export interface RoleplayRound {
   reply: string;
 }
 
-/** 句型卡上的一行：英文原样 + 中文意思（孩子看得懂的那半）。 */
+/** 句型卡上的一行：英文原样 + 中文意思（学员看得懂的那半）。 */
 export interface RoleplayPattern {
   phrase: string;
   gloss: string;
@@ -36,7 +36,7 @@ export interface RoleplaySummary {
   nonEnglishTurns: number;
   /** 用到的句型（按下面的表逐条匹配，用不到的不出现）。 */
   patterns: RoleplayPattern[];
-  /** 用到的场景词（咖啡店那几个名词/形容词）。 */
+  /** 用到的场景词（饮品、点心和点单选项，见下面的 `SCENE_WORDS`）。 */
   words: string[];
   /** 说得最长的那一句（词数最多的一轮转写），没有就是 null。 */
   longest: string | null;
@@ -45,27 +45,42 @@ export interface RoleplaySummary {
 }
 
 /**
- * 句型表。匹配的是**归一化之后**的转写（小写、去标点、单引号统一）。
- * 每条只认自己那一种说法：学员说 `I want …` 时不会点亮 `I would like …`——
- * 小结卡是在告诉孩子「这句话你会说了」，把没说的算成会说是这张卡最贵的错。
+ * 句型表：店员 Sam 的定义里「用词（B1 起点）」那一节的「句」一行
+ * （`agenthub/agents/edu-english-roleplay/CLAUDE.md`），两边改一边要跟着改。
+ * 匹配的是**归一化之后**的转写（小写、去标点、单引号统一）。
+ * 每条只认自己那一种说法：学员说 `I want …` 时不会点亮 `I'd like …`——
+ * 小结卡是在告诉学员「这句话你会说了」，把没说的算成会说是这张卡最贵的错。
+ * 同一句只换情态动词（can / could）算同一种说法；`get` 和 `have` 各是各的。
  */
 const PATTERNS: { phrase: string; gloss: string; test: RegExp }[] = [
-  { phrase: "I would like …", gloss: "我想要……", test: /\bi(?:'d| would) like\b/ },
-  { phrase: "I want …", gloss: "我要……", test: /\bi want\b/ },
-  { phrase: "Can I have …", gloss: "我可以要……吗", test: /\bcan i (?:have|get)\b/ },
-  { phrase: "How much …", gloss: "多少钱", test: /\bhow much\b/ },
-  { phrase: "here you are", gloss: "给你", test: /\bhere you (?:are|go)\b/ },
-  { phrase: "please", gloss: "请", test: /\bplease\b/ },
-  { phrase: "thank you", gloss: "谢谢", test: /\bthank you\b|\bthanks\b/ },
-  { phrase: "hi / hello", gloss: "你好", test: /\b(?:hi|hello)\b/ },
-  { phrase: "bye", gloss: "再见", test: /\b(?:bye|goodbye|see you)\b/ },
+  { phrase: "I'd like …", gloss: "我想要……", test: /\bi(?:'d| would) like\b/ },
+  { phrase: "Can I get …", gloss: "给我来……", test: /\b(?:can|could) i get\b/ },
+  { phrase: "Could I have …", gloss: "能给我……吗", test: /\b(?:could|can) i have\b/ },
+  { phrase: "How much …?", gloss: "……多少钱？", test: /\bhow much\b/ },
+  { phrase: "For here, please.", gloss: "在店里用。", test: /\bfor here\b/ },
+  { phrase: "Can I pay by card?", gloss: "可以刷卡吗？", test: /\b(?:can|could) i pay by card\b/ },
 ];
 
-/** 咖啡店这一课点的词。只数学员自己说出来的，不数 agent 说的。 */
+/** 一个场景词：显示的词 + 在归一化转写里找它的式子（带 g：命中的那一段要挖掉）。 */
+function sceneWord(word: string, test = new RegExp(`\\b${word}\\b`, "g")): { word: string; test: RegExp } {
+  return { word, test };
+}
+
+/**
+ * 场景词：同一节的「饮品和点心」「选项」两行。只数学员自己说出来的，不数 agent 说的。
+ * 按表的顺序匹配，命中就从这一轮的转写里挖掉——所以多词的要排在它含的单词前面：
+ * 说 `hot chocolate` 不顺带点亮 `hot`，说 `oat milk` 不顺带点亮 `milk`。
+ * `for here` 不在这里：它是上面的一条句型。
+ */
 const SCENE_WORDS = [
-  "coffee", "tea", "milk", "juice", "water", "cake", "cookie",
-  "hot", "iced", "cold", "small", "big", "large",
-] as const;
+  sceneWord("coffee"), sceneWord("latte"), sceneWord("cappuccino"), sceneWord("tea"),
+  sceneWord("hot chocolate"), sceneWord("juice"), sceneWord("cake"), sceneWord("muffin"),
+  sceneWord("croissant"), sceneWord("sandwich"),
+  sceneWord("hot"), sceneWord("iced"), sceneWord("small"), sceneWord("medium"), sceneWord("large"),
+  sceneWord("oat milk"), sceneWord("milk"), sceneWord("sugar"),
+  // 「外带」的 to go；前面是 have / want / need / going / got 的是「得走了」「想去」，不算。
+  sceneWord("to go", /(?<!\b(?:have|has|want|wants|need|needs|going|got) )\bto go\b/g),
+];
 
 /** 归一化：小写、弯引号拉直、去掉字母/单引号之外的一切、空白折叠。 */
 export function normalizeTranscript(text: string): string {
@@ -93,7 +108,7 @@ function hasChinese(text: string): boolean {
  * 从逐轮的 (转写, 回复) 算出小结卡的全部读数。
  *
  * 空轮（转写为空）不计入 `studentTurns`，但要计入 `missedTurns`——「有 3 轮听见了、
- * 1 轮没听清」比「说了 3 句」信息量大：没听清那轮往往才是孩子最想重来的那轮。
+ * 1 轮没听清」比「说了 3 句」信息量大：没听清那轮往往才是学员最想重来的那轮。
  */
 export function summarizeRoleplay(rounds: readonly RoleplayRound[]): RoleplaySummary {
   const patterns: RoleplayPattern[] = [];
@@ -125,8 +140,13 @@ export function summarizeRoleplay(rounds: readonly RoleplayRound[]): RoleplaySum
         patterns.push({ phrase: pattern.phrase, gloss: pattern.gloss });
       }
     }
-    for (const word of SCENE_WORDS) {
-      if (new RegExp(`\\b${word}\\b`).test(normalized)) words.add(word);
+    let rest = normalized;
+    for (const { word, test } of SCENE_WORDS) {
+      const next = rest.replace(test, " ");
+      if (next !== rest) {
+        words.add(word);
+        rest = next;
+      }
     }
   }
 

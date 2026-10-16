@@ -832,6 +832,28 @@ code {
   min-height: 1.75em;
   white-space: pre;
 }
+/* 点亮的行段（`mark`）：亮的那几行左边一条绿线，别的行变暗。 */
+.code pre:has(.code-line[data-mark]) {
+  /* grid：每一行都撑到最宽那一行的宽度，横向滚动时底色不断 */
+  display: grid;
+  padding-left: 0;
+  padding-right: 0;
+}
+.code-line[data-mark] {
+  padding: 0 16px 0 13px;
+  border-left: 3px solid transparent;
+  transition:
+    opacity 0.25s,
+    background 0.25s,
+    border-color 0.25s;
+}
+.code-line[data-mark="off"] {
+  opacity: 0.42;
+}
+.code-line[data-mark="on"] {
+  border-left-color: var(--brand);
+  background: oklch(1 0 0 / 0.06);
+}
 .code i {
   font-style: normal;
   color: oklch(0.83 0.1 150);
@@ -934,6 +956,10 @@ code {
 }
 .link:hover {
   border-color: var(--line-2);
+}
+/* 公开仓里还没有的路径：只显示文字，不做悬停反馈 */
+.link[data-static]:hover {
+  border-color: var(--line);
 }
 .link-main {
   display: grid;
@@ -1267,5 +1293,178 @@ code {
       tan(atan2(100vw - 32px, var(--phone-w))),
       tan(atan2(100dvh - 112px, var(--phone-h)))
     );
+  }
+}
+
+/* 手机宽度（<600px）：顶栏一行要约 520px（品牌、四个场景、「阅读文档」），放不下就拆两行——
+ * 第一行品牌和「阅读文档」，第二行场景占满。只改摆放，DOM 顺序不变，键盘 Tab 仍是
+ * 品牌 → 场景 → 阅读文档。 */
+@media (max-width: 599px) {
+  .topbar {
+    height: auto;
+    min-height: var(--topbar-h);
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "brand links"
+      "tabs tabs";
+    row-gap: 8px;
+    padding: 10px 16px;
+  }
+  .brand {
+    grid-area: brand;
+  }
+  .top-links {
+    grid-area: links;
+  }
+  .scen-tabs {
+    grid-area: tabs;
+    justify-self: stretch;
+  }
+  .scen-tab {
+    flex: 1 0 auto;
+    justify-content: center;
+  }
+}
+
+/* ── 回放舞台：手机下面的播放条、右栏的四幕列表（团队群原型） ─────── */
+/* 导语下面的一行小字：这一页是原型、哪些是目标形态。 */
+.lead .lead-note {
+  margin-top: 10px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-3);
+}
+/* 两个代码块叠着放时，中间留一条缝。 */
+.sec .code + .code {
+  margin-top: 12px;
+}
+
+.replay-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  height: 36px;
+  padding: 0 14px 0 5px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--plate);
+  font-size: 12px;
+  color: var(--text-2);
+}
+.replay-btn {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: var(--ink);
+  transition: background 0.15s;
+}
+.replay-btn:hover {
+  background: var(--surface);
+}
+.replay-btn:first-child {
+  background: var(--brand);
+  color: #fff;
+}
+.replay-btn:first-child:hover {
+  background: var(--brand-strong);
+}
+.replay-btn svg {
+  width: 14px;
+  height: 14px;
+}
+.replay-acts {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  margin: 0 2px;
+  padding: 0;
+}
+.replay-acts li {
+  display: flex;
+  align-items: center;
+}
+.replay-acts li + li::before {
+  content: "";
+  width: 10px;
+  height: 1.5px;
+  background: var(--line-2);
+  transition: background 0.2s;
+}
+.replay-acts li[data-state="done"]::before,
+.replay-acts li[data-state="active"]::before {
+  background: color-mix(in oklch, var(--brand) 55%, white);
+}
+.replay-acts button {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line-2);
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  transition:
+    background 0.2s,
+    border-color 0.2s,
+    color 0.2s,
+    box-shadow 0.2s;
+}
+.replay-acts li[data-state="done"] button {
+  background: var(--brand-soft);
+  border-color: color-mix(in oklch, var(--brand) 45%, white);
+  color: var(--brand);
+}
+.replay-acts li[data-state="active"] button {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+.replay-now {
+  min-width: 3.2em;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.replay-time {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* 四幕列表借时间线的版式，副标题是一句话，不是一串 id。 */
+.replay-tl .tl-sub {
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.6;
+  word-break: normal;
+}
+.replay-jump {
+  padding: 2px 0 0;
+  text-decoration: underline;
+  text-decoration-color: var(--line-2);
+  text-underline-offset: 3px;
+}
+.replay-jump:hover {
+  color: var(--brand);
+}
+@media (max-width: 480px) {
+  .replay-time {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .replay-bar *,
+  .replay-tl *,
+  .code-line[data-mark] {
+    transition: none !important;
   }
 }

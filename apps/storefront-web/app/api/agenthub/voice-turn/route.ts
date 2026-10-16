@@ -1,5 +1,5 @@
 import { isTerminalTurnStatus, PilotPlatformApiError } from "@kanyun-ai-infra/agenthub";
-import { getAgentHubClient, isAgentHubConfigured } from "@/lib/agenthub/client";
+import { getAgentHubClient, isAgentHubReachable } from "@/lib/agenthub/client";
 import { ownsSession, sessionNotFound } from "@/lib/agenthub/session-binding";
 import { errorResponse, httpStatusOf } from "@/lib/backend/errors";
 import { crossSiteRequest } from "@/lib/backend/guards";
@@ -80,7 +80,7 @@ async function readTranscript(
 }
 
 export async function POST(req: Request) {
-  if (!isAgentHubConfigured()) {
+  if (!isAgentHubReachable()) {
     return Response.json({ error: "not_configured" }, { status: 501 });
   }
   // 花的是平台的钱（回合 + 转写），跨站挡板和 /api/course/audio 同一条（见 lib/backend/guards.ts）。

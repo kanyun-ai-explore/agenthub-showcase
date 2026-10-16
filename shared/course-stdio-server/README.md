@@ -44,7 +44,7 @@ agent 参考着推进，不照搬。
 
 ## 本地验证
 
-`mcp` 包不在仓库依赖里（它由平台 Environment `cma-python` 预装），本地验纯逻辑用打桩：
+`mcp` 包不在仓库依赖里（沙箱里由平台的 Environment 预装），本地验纯逻辑用打桩：
 
 ```python
 import sys, types
@@ -62,8 +62,11 @@ import course_stdio_server.__main__ as m   # 之后所有工具都是普通函�
 
 ## 接到平台上要做的事
 
-1. 在控制台注册这个 MCP（门户操作，SDK 没有这个接口），把拿到的 id 回填进五个
-   `agent.yaml` 的 `mcpServers`——仓库里提交的是 `vcrd_PLACEHOLDER` 占位。
+教育 agent 的 `agent.yaml` 引用的是 remote 的 course MCP，也就是站点的 `/api/mcp/course`（TS 移植，
+与这里的 Python 用 `scripts/course-mcp-parity/` 对拍）；这份 stdio server 是对拍用的参考实现。
+
+1. 在控制台把站点的 `/api/mcp/course` 注册成 remote MCP（门户操作，SDK 没有这个接口），把拿到的 id
+   回填进各教育 agent 的 `agent.yaml` 的 `mcpServers`——仓库里提交的是 `vcrd_PLACEHOLDER` 占位。
 2. 推默认分支跑流水线发布。
 3. 把五个 workload id 配成站点的环境变量：`AGENTHUB_COURSE_SALES_AGENT_ID` /
    `AGENTHUB_MATH_TUTOR_AGENT_ID` / `AGENTHUB_CHINESE_TUTOR_AGENT_ID` /

@@ -16,20 +16,25 @@ format: claude_code
 # 「跟读」走平台语音回合，所以这里声明 voice.input（转写）：语音回合在**派发前**同步
 # 转写，转写文本就是这一轮的 user.text，agent 拿到的和打字进来的一模一样。
 #
-# - `input.model` = `qwen3-asr-flash`，`language: en`：language 是可选字符串，平台原样作为
-#   multipart 的 language 字段转给模型网关；实测 qwen3-asr-flash 带 language=en 回 200、文本正确。
+# - `input.model` = `qwen3-asr-flash`，`language: en`：language 是可选字符串，由平台转给转写服务；
+#   qwen3-asr-flash 带 language=en 回 200、文本正确。
 # - **不声明 `output`**：跟读只要文字点评。声明了它，平台会在每个回合终态后把回复合成成分段
 #   音频——出题回合也合，页面一段都不播。页面也不读回合音频：跟读的文字点评走
 #   /api/agenthub/turn-result。
 # - 之前用的是 azure-openai-gpt-4o-mini-transcribe（输出 azure-openai-gpt-4o-mini-tts / alloy / mp3）。
-# 声明了 voice 的 agent 必须走模型网关上的模型服务（平台在创建会话时校验），本 agent 用的就是 `model`。
+#
+# 转写走阿里云百炼：`provider: dashscope`，`modelService: bailian` 是项目里登记的百炼模型服务
+# （主机 dashscope.aliyuncs.com），⚠️ 换成你项目里注册的那个。平台在创建会话时按 provider 校验服务主机，
+# 这一段不写 `modelService` 就落到顶层的 `model`（模型网关），校验不过、会话建不起来，所以必须写。
+# `language: en` 由平台放进百炼请求的 `asr_options.language`。顶层 `modelService` / `model` 只管文字回合。
 # 听音题的读音来自平台的朗读 agent edu-english-reader，与这里互不影响。
 modelService: model
 model: deepseek-v4-flash
 
 voice:
   input:
-    provider: modelgate
+    provider: dashscope
+    modelService: bailian
     model: qwen3-asr-flash
     language: en
 
@@ -50,7 +55,7 @@ mcpServers:
   # 站点先发，agent 才调得到。
   - vcrd_PLACEHOLDER
 
-environment: cma-python         # 与电商两个 agent 同一个 Environment
+environment: cma-python-podagent  # 评测会话按这个名字解析环境；槽位会话走槽位绑定的环境（另一条路径）
 
 agentOptions:
   maxTurns: 16

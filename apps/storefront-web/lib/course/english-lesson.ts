@@ -51,8 +51,9 @@ export interface LessonContent {
   /** `lesson` = 一次 present_lesson；`cards` = 兜底，从单题卡收的。 */
   source: "lesson" | "cards";
   /**
-   * 单元 3 那一关是哪个会话的哪一轮出的（回合终态时由 `useLessonChannel` 记下）。取运行时读音靠它：
-   * 浏览器只报题的坐标，服务端从那一轮里取要念的文字（`lib/course/course-audio.ts`）。
+   * 单元 3 那一关是哪个会话的哪一轮出的（`useLessonChannel` 记下：回合终态时定下来；回合还在跑、流里已经有
+   * 这一关的卡时先记上）。取运行时读音靠它：浏览器只报题的坐标，服务端从那一轮里取要念的文字
+   * （`lib/course/course-audio.ts`）。
    */
   origin?: { sessionId: string; turnId: string };
 }
@@ -248,6 +249,59 @@ export function settleLessonContent(
   if (!after) return same ? { ...same, complete: true } : null;
   const settled = { ...stampLesson(after, lessonId), complete: true };
   return same && same.exercises.length > settled.exercises.length ? { ...same, complete: true } : settled;
+}
+
+/** 一道题要念的那句（听音选词的 `audio_text`、跟读的 `text`）；不念的题型是 null。 */
+const spokenText = (exercise: Exercise | undefined): string | null =>
+  exercise?.type === "listen_choice" ? exercise.audio_text : exercise?.type === "read_aloud" ? exercise.text : null;
+
+/**
+ * 同一关只增不减：草稿画出的题已经交给播放器了（`shown`：槽位里**同一关**的内容，没有就是 null），流里拼出来的
+ * 这一版（`live`）题没变多就不换题。
+ */
+export function pickLiveLesson(shown: LessonContent | null, live: LessonContent): LessonContent {
+  return !shown || shown.exercises.length < live.exercises.length ? live : shown;
+}
+
+/**
+ * 回合还在跑时这一关的出处：`{ sessionId, turnId }`；还不能记就是 undefined。
+ *
+ * 记上出处，页面就会按坐标去取首句，所以判据是「站点这时候取出来的会不会就是屏幕上那一句」：拿流里的**卡**
+ * （`cards` 只有工具的结果，不含草稿入参）走站点同一条取题链路（`lessonFromCards`，不带 `live`——
+ * `/api/course/audio` 就是这么取的），屏幕上第一句要念的那道题（`shown`），在同一个下标上得是同一句。
+ * 对不上的几种，都先不记（等对上了再记，不白跑一趟）：
+ * - 只有草稿入参、工具还没回结果（草稿可能被 MCP 拒掉）；
+ * - 两批并行发出、第 2 批的结果先到：站点那一轮里的第 0 道这时是第 2 批的题；
+ * - 首句在后面那一批、那一批的结果还没到；草稿被拒后重调，收下的那一版首句换了。
+ */
+export function liveLessonOrigin(
+  sessionId: string | null | undefined,
+  turnId: string | undefined,
+  cards: readonly TurnCard[],
+  shown: Pick<LessonContent, "exercises">,
+): LessonContent["origin"] {
+  if (!sessionId || !turnId) return undefined;
+  const at = shown.exercises.findIndex((exercise) => spokenText(exercise) !== null);
+  const accepted = lessonFromCards(cards);
+  if (at < 0 || !accepted || spokenText(accepted.exercises[at]) !== spokenText(shown.exercises[at])) return undefined;
+  return { sessionId, turnId };
+}
+
+/**
+ * 回合还在跑时，流里拼出来的这一关（`live`）要不要换掉已经交出去的（`shown`，同 `pickLiveLesson`）。
+ * 返回新的内容；不用动返回 null。
+ * - 题按 `pickLiveLesson`（只增不减）；
+ * - 出处到了就补上（题没变多也补）；记过的不丢、不换。
+ */
+export function mergeLiveLesson(
+  shown: LessonContent | null,
+  live: LessonContent,
+  origin: LessonContent["origin"],
+): LessonContent | null {
+  const next = pickLiveLesson(shown, live);
+  const kept = shown?.origin ?? origin;
+  if (next === shown && kept === shown.origin) return null;
+  return kept ? { ...next, origin: kept } : next;
 }
 
 /**

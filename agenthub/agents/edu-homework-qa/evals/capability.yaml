@@ -9,15 +9,18 @@ purpose: capability
 # capability 语义：不阻断发布门禁，分数进趋势页看走势。trials: 2 + passPolicy: any
 # ——judge 有方差，能力层信号优先于严格。
 #
-# judge 用 qwen3-vl-flash：被测模型是本 agent 的 deepseek-v4-flash，judge 必须不同
-# （resolve 层防自评硬校验），同时演示跨厂商判分（deepseek 被 qwen 评）。
-# 选 qwen3-vl-flash 的依据：edu-english-reader 以同一 `model` 服务在生产跑该模型
-# ——ModelGate 对该 id 的路由与鉴权是实证可用的（glm-5.3-flash 首探失败，根因另查，
-# 见 平台 issue）。剩余风险：qwen 经 Anthropic 兼容端点做 forced tool-call 判分
-# 的表现，由首跑实证。
+# judge 用 model-glm-5.3-flashx：被测模型是本 agent 的 deepseek-v4-flash，judge 必须
+# 不同（resolve 层防自评硬校验）。
+# 判官取 GLM 系，与被测不同系列；7 个 capability suite 用同一个判官。GLM 三档里选 flashx：单维度耗时最短，
+# 离判官调用的 120 s 超时最远（超时不重试，该 trial 记 errored）；model-glm-5.3、model-glm-5.3-flash 都慢一倍左右。
+# 换判分模型前先小流量验证：网关对具体模型的 tool-call 翻译质量因模型而异，能稳定回 1-5 整数档再换。
+# graderVersion 3：换了 judge，打分刻度跟着变——按平台的换尺机制主动声明，基线换新桶，
+# 趋势页会在换尺那一点自动加注解。
+# judgeModelService=model：判分通道显式声明，不借用被测 agent 的模型服务。
 
 defaults:
-  judgeModel: qwen3-vl-flash
+  judgeModelService: model
+  judgeModel: model-glm-5.3-flashx
 
 cases:
   - id: wrong-answer-well-corrected
@@ -40,7 +43,7 @@ cases:
         rubric: rubrics/homework-feedback-quality.md
         dimensions: [反馈具体性, 分层引导, 语气鼓励]
         threshold: 0.7
-        graderVersion: 1
+        graderVersion: 3
 
   - id: answer-begging-gently-refused
     description: >-
@@ -61,4 +64,4 @@ cases:
         rubric: rubrics/homework-feedback-quality.md
         dimensions: [分层引导, 语气鼓励]
         threshold: 0.7
-        graderVersion: 1
+        graderVersion: 3

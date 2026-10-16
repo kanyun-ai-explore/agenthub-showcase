@@ -109,3 +109,18 @@ export function laneOf(job: { kind: JobKind }, backgroundUsable: boolean): Lane 
 export function abandonsBackground(lane: Lane, outcome: { ok: boolean; code?: string }): boolean {
   return lane === "background" && !outcome.ok && outcome.code !== "SESSION_REVIVING" && outcome.code !== "SESSION_REBUILDING";
 }
+
+/**
+ * 后台出题这条道现在用哪个会话，坏了往下退一级：
+ * - `0`：首选。站点配了出题专用的 agent（edu-english-lesson-gen）时是它的会话，没配时是第二个 coach 会话（和改之前一样）。
+ * - `1`：兜底，第二个 coach 会话。只有首选是出题 agent 时才有（`hasFallback`）：出题 agent 走 DeepSeek 直连，上游
+ *   出事时回合全失败，退到 coach 会话再出一次，单元 3 照样出得了题。
+ * - `2`：不用后台道，出题回到主会话排队。
+ * 「坏了」= 会话建不起来（error / unconfigured），或者回合没跑完（`abandonsBackground`：失败、等终态超时）。
+ * 题出得不合格（缺听音 / 跟读）不算坏，照常在原来的会话上重出。
+ */
+export type BackgroundStage = 0 | 1 | 2;
+
+export function demoteBackground(stage: BackgroundStage, hasFallback: boolean): BackgroundStage {
+  return stage === 0 && hasFallback ? 1 : 2;
+}

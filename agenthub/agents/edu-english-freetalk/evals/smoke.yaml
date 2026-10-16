@@ -1,0 +1,148 @@
+apiVersion: agenthub/v1alpha1
+kind: EvalSuite
+purpose: regression
+
+# 冒烟：Ava 说的话会被直接念出来，所以断言的都是「说出来是什么样」。
+# gate 只放回合完成和三条明文约定，其余放 soft；安全红线在同目录的 safety.yaml。
+# `matches` 是不带 flag 的正则：大小写写成显式分支，跨行用 `[\s\S]` 不用 `.`。
+
+cases:
+  - id: opening-greeting
+    description: >-
+      页面替对方按「开始」（发来的是中文）：照常先用英语问候、邀请挑话题，
+      不把「开始」当成一个话题。
+    turns:
+      - user: "开始"
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: reply
+        label: english-greeting-and-invite
+        severity: gate
+        expect:
+          matches: "(Hi|Hello|Hey)\\b[\\s\\S]{0,240}(talk about|chat about|what would you like|what do you want|on your mind|your day|your week|tell me about|feel like talking)"
+      - type: transcript
+        label: no-tools
+        severity: soft
+        expect:
+          usedNoTools: true
+
+  - id: english-only-clean-text
+    description: >-
+      对面用英语聊一件事：回复全英语（不含中文），且不含 markdown 记号。
+    turns:
+      - user: "I watched a movie yesterday. It was very good!"
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: reply
+        label: reply-has-no-chinese
+        severity: gate
+        expect:
+          matches: '^[^一-鿿]*$'
+      - type: reply
+        label: no-markdown-asterisk
+        severity: gate
+        expect:
+          excludes: "*"
+      - type: reply
+        label: no-markdown-hash
+        severity: soft
+        expect:
+          excludes: "#"
+      - type: transcript
+        label: no-tools
+        severity: soft
+        expect:
+          usedNoTools: true
+
+  - id: short-turn-discipline
+    description: >-
+      一次只说一到两句：回复里的句末标点（`.` `?` `!`）不超过两个。
+      抓的是「明显讲了一大段」。
+    turns:
+      - user: "I went to Hangzhou with my friends last weekend. We ate a lot and walked around the lake."
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: reply
+        label: at-most-two-sentence-ends
+        severity: soft
+        expect:
+          matches: "^[^.?!]*(?:[.?!][^.?!]*){0,2}$"
+      - type: transcript
+        label: no-tools
+        severity: soft
+        expect:
+          usedNoTools: true
+
+  - id: review-request-answered-in-chinese
+    description: >-
+      页面挂断后发来的 `【点评】`（附转写）：用中文两到三句，先具体说做得好的，再给一个
+      改进点；不接着聊、不提问、不列清单。
+    turns:
+      # 这条文本要和页面真发的那条逐字一致：
+      # apps/storefront-web/lib/agenthub/realtime-transcript.ts 的 buildReviewRequest()。
+      - user: "【点评】下面是刚才这次英语自由对话的转写。请用中文写两三句点评（这是给学习者看的，不在通话里说出来）。\n不要接着聊、不要问问题、不打分、不逐句纠错；先说他做得好的一个具体地方，再给一个可以改进的点并附一个更自然的说法。\n\n你：I go to Beijing last year with my family.\nAva：Oh, you went to Beijing last year! How was it?\n你：It is very fun. I see many old buildings."
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: reply
+        label: review-is-chinese
+        severity: gate
+        expect:
+          matches: '[一-鿿]{6,}'
+      - type: reply
+        label: review-has-no-markdown-asterisk
+        severity: soft
+        expect:
+          excludes: "*"
+      - type: reply
+        label: review-at-most-three-sentences
+        severity: soft
+        expect:
+          matches: "^[^。！!?？]*(?:[。！!?？][^。！!?？]*){0,3}$"
+      - type: transcript
+        label: no-tools
+        severity: soft
+        expect:
+          usedNoTools: true
+
+  - id: recast-instead-of-lecture
+    description: >-
+      对方时态说错了：把正确的说法自然地重复一遍接着聊，不点评语法、不说「你应该说…」。
+    turns:
+      - user: "I go to Beijing last year with my family."
+    graders:
+      - type: transcript
+        label: turn-completed
+        severity: gate
+        expect:
+          completed: true
+      - type: reply
+        label: recasts-the-past-tense
+        severity: soft
+        expect:
+          matches: "([Yy]ou|you) went to Beijing"
+      - type: reply
+        label: no-grammar-lecture
+        severity: soft
+        expect:
+          matches: "^(?:(?!should say|[Cc]orrect|[Gg]rammar|mistake|你应该)[\\s\\S])*$"
+      - type: transcript
+        label: no-tools
+        severity: soft
+        expect:
+          usedNoTools: true

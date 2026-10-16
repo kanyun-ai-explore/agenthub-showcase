@@ -1,5 +1,5 @@
 import { PilotPlatformApiError } from "@kanyun-ai-infra/agenthub";
-import { getAgentHubClient, isAgentHubConfigured } from "@/lib/agenthub/client";
+import { getAgentHubClient, isAgentHubReachable } from "@/lib/agenthub/client";
 import { ownsSession, sessionNotFound } from "@/lib/agenthub/session-binding";
 import { settledTurnBody, waitForTurnWithin } from "@/lib/agenthub/turn-wait";
 import { errorResponse, httpStatusOf } from "@/lib/backend/errors";
@@ -17,6 +17,10 @@ import { errorResponse, httpStatusOf } from "@/lib/backend/errors";
  * 读超时砍掉，短等 + 重问不怕这个。
  * `transcript` 一并带上：voice-turn 那一跳没读到转写时（回合行还不可见），页面从这里补拿。
  *
+ * 回合行还不可见（平台回 `TURN_NOT_FOUND`）也回 pending，带上 `notFound: true`：`/api/agenthub/turn` 等待里遇到它时是交给这里接着等的，这里再当成定论，那一轮就在
+ * 回合行晚到时被判死。上限在页面那一侧（`pollTurnResult` 的 `TURN_NOT_FOUND_GRACE_MS`）：从派发算过了
+ * 宽限还是不可见，才收成失败——真不存在的回合不会一直 pending。
+ *
  * 不挂跨站挡板：只读、不花钱，和 `/api/agenthub/stream` 一样。
  */
 
@@ -29,7 +33,7 @@ function fail(status: number, code: string, detail?: string): Response {
 
 export async function GET(req: Request) {
   const startedAt = Date.now();
-  if (!isAgentHubConfigured()) {
+  if (!isAgentHubReachable()) {
     return Response.json({ error: "not_configured" }, { status: 501 });
   }
   const url = new URL(req.url);
@@ -48,6 +52,9 @@ export async function GET(req: Request) {
     if (!settled) return Response.json({ status: "pending", turnId });
     return Response.json(settledTurnBody(settled, turnId));
   } catch (err) {
+    if (err instanceof PilotPlatformApiError && err.code === "TURN_NOT_FOUND") {
+      return Response.json({ status: "pending", turnId, notFound: true });
+    }
     if (err instanceof PilotPlatformApiError) {
       return fail(httpStatusOf(err), err.code);
     }

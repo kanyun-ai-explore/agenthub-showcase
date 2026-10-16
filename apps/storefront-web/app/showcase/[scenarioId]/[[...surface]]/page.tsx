@@ -8,9 +8,12 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { CaseStage } from "@/components/showcase/CaseStage";
+import { TeamChatStage } from "@/components/showcase/TeamChatStage";
 import { SideNav, TopBar } from "@/components/showcase/Chrome";
+import { isAgentHubConfigured } from "@/lib/agenthub/client";
 import { catalogSeed } from "@/lib/showcase/catalog-seed";
 import { loadLesson } from "@/lib/course/lesson";
+import { lessonBackgroundAgent } from "@/lib/course/lesson-agent";
 import { SCENARIOS, findScenario, findSurface } from "@/lib/showcase/cases";
 
 export const dynamic = "force-dynamic";
@@ -38,13 +41,21 @@ export default async function ScenarioPage({ params }: { params: Params }) {
   // 只有需要的视角才付出加载代价
   const catalog = chosen.app === "shopping" ? await catalogSeed() : undefined;
   const lesson = chosen.app === "classroom" ? await loadLesson() : undefined;
+  // 英语小课单元 3 的后台出题走哪个 agent：环境变量只有这里读得到（本页 force-dynamic，每个请求都读）。没配是 undefined，
+  // 第二个会话照旧建在 coach 上（`lib/course/lesson-agent.ts`）。
+  const backgroundAgent = lessonBackgroundAgent(chosen.app, isAgentHubConfigured) ?? undefined;
 
   return (
     <div className="site" data-mode="app">
       <TopBar scenarioId={scenario.id} />
       <div className="frame">
         <SideNav scenario={scenario} surfaceId={chosen.id} />
-        <CaseStage scenario={scenario} surface={chosen} catalog={catalog} lesson={lesson} />
+        {/* 回放视角没有会话，不走 CaseStage（它一挂载就取访客身份、挂会话 hook）。 */}
+        {chosen.app === "team-chat" ? (
+          <TeamChatStage />
+        ) : (
+          <CaseStage scenario={scenario} surface={chosen} catalog={catalog} lesson={lesson} backgroundAgent={backgroundAgent} />
+        )}
       </div>
     </div>
   );

@@ -15,6 +15,8 @@ purpose: capability
 # simModel=deepseek-v4-flash：本 agent 的 deepseek 服务认识（judge 同款实证），
 # 与被测 deepseek-flash 不同 id（同厂不同型号——「同源放大过度配合」的警示
 # 已知，该服务可选面内已是最优）。
+# simModelService=deepseek：sim 通道显式声明，case 级（不设 suite 缺省——这个对象的字段
+# 自动进 case digest）；sim 不借用被测 agent 的模型服务。
 #
 # ⚠️ userSim suite 不进 Pipeline（sim 对话时长装不进 20 分钟等待窗，结论记
 # userSim-not-pipeline-eligible）——需手动/CLI 触发执行。maxTurns 用尽≠错误，
@@ -41,6 +43,7 @@ cases:
       opening: "豆豆老师，9 加 4 好难呀，我不会算。"
       maxTurns: 6
       simModel: deepseek-v4-flash
+      simModelService: deepseek
     graders:
       - type: transcript
         label: turn-completed

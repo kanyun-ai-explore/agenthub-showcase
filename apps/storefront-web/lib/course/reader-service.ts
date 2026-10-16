@@ -9,7 +9,8 @@
  * - 5：回合正文和原文严格相等才用（`isExactEcho`），不等重来一次，再不等就报错不播。
  * 文字本身（约束 1、4）由路由从课程内容里取、先过 `reader-guard.ts`，这里只收已经过了守卫的句子。
  *
- * 会话怎么开：每个学员（按他的 coach 会话）一个 reader 会话，懒建；平台一个会话同一时刻只跑一个回合，
+ * 会话怎么开：每个学员（按他的 coach 会话）一个 reader 会话，懒建；单元 3 一开始出题，页面会先来要一次
+ * 预建（`prewarmReader`），第一句要合成时会话多半已经在表里了。平台一个会话同一时刻只跑一个回合，
  * 所以同一个 reader 会话上的回合排成一条链。会话用满 `MAX_TURNS` 轮换一个新的（live 会话的上下文
  * 会一直长），闲置超过 `IDLE_MS` 的在下一次调用时顺手 terminate。这些状态都在本进程内存里：
  * 站点多副本时各副本各开各的，正确性不受影响，只是同一句可能在两个副本各合成一次。
@@ -17,9 +18,10 @@
  * 合成结果按原文缓存（进程内 LRU）：同一句话不论哪个学员要，都只合成一次。
  */
 
-import { getAgentHubClient } from "@/lib/agenthub/client";
+import { getAgentHubClient, stageForAgentEnv } from "@/lib/agenthub/client";
 import { isExactEcho } from "@/lib/course/reader-guard";
 import { concatWav } from "@/lib/course/wav";
+import { idTag } from "@/lib/log-id";
 
 export const READER_AGENT_ENV = "AGENTHUB_ENGLISH_READER_AGENT_ID";
 
@@ -34,15 +36,23 @@ const RATE_LIMIT = 30;
 const CACHE_LIMIT = 128;
 /** 一个朗读回合（出字 + 合成）的等待上限：test 槽实测段 0 在派发后 1.9–2.8 s。 */
 const TURN_TIMEOUT_MS = 45_000;
+/**
+ * 等朗读回合终态、等它的音频时多久问一次平台。SDK 默认 1 s：一个回合才 2 s 出头，段在回合
+ * 结束后约 0.7 s 就绪，两次等待各晚到将近一个间隔，按默认间隔段就绪后 1.2 s 页面才拿到。只有这两处用它；
+ * 建会话的 `sessions.wait` 和别的路由还是默认值，`TURN_TIMEOUT_MS` 不变。代价是每句多约 5 次读请求：
+ * 一句大约 7 次读回合 + 3 次读音频（一次请求本身 0.15–0.3 s），默认间隔按 SDK 的循环算是 4 + 1 次。
+ */
+export const TURN_POLL_MS = 200;
 
 export type ReaderErrorCode = "not_configured" | "rate_limited" | "echo_mismatch" | "audio_failed" | "upstream";
 
 export class ReaderError extends Error {
-  constructor(
-    readonly code: ReaderErrorCode,
-    message: string,
-  ) {
+  // 不用构造函数参数属性：这个文件要能在 `node --experimental-strip-types` 下直接加载。
+  readonly code: ReaderErrorCode;
+
+  constructor(code: ReaderErrorCode, message: string) {
     super(message);
+    this.code = code;
     this.name = "ReaderError";
   }
 }
@@ -70,6 +80,13 @@ const opening = new Map<string, Promise<ReaderSession>>();
 const cache = new Map<string, ReaderAudio>();
 const inflight = new Map<string, Promise<ReaderAudio>>();
 const sent = new Map<string, number[]>();
+
+/**
+ * 表的键：coach 会话 id 一律小写。归属校验把大小写不同的同一个 id 当同一个
+ * （`lib/agenthub/session-binding.ts` 的 `normalizeId`），这里不跟着归一的话，同一个 coach 会话换个大小写再来，
+ * 就能多开一个朗读会话、多拿一份限速额度。
+ */
+const keyOf = (coachSessionId: string): string => coachSessionId.toLowerCase();
 
 /** reader 的 workload id；没配就是 null（页面退到本机语音）。空串当没配。 */
 export function readerAgentId(): string | null {
@@ -130,7 +147,8 @@ async function openSession(key: string, agentId: string): Promise<ReaderSession>
   const created = await client.sessions.create({
     projectId: env.projectId,
     agentId,
-    stage: env.stage,
+    // 朗读服务用**它自己的** key 的覆盖（`AGENTHUB_ENGLISH_READER_STAGE`）。
+    stage: stageForAgentEnv(READER_AGENT_ENV, env.stage),
     user: { id: `reader-${key}` },
   });
   await client.sessions.wait(created.sessionId, { timeoutMs: 60_000 });
@@ -154,6 +172,39 @@ async function sessionFor(key: string, agentId: string): Promise<ReaderSession> 
   return open;
 }
 
+export type PrewarmOutcome = "ready" | "opened" | "not_configured" | "failed";
+
+/**
+ * 预建：单元 3 一开始出题，页面就让站点把这个学员的 reader 会话先建好。`coachSessionId` 和
+ * `readClip` 的一样，是出这一关的那个 coach 会话 id；建好的会话进同一张表，出题回合跑完、第一句要合成时直接用，
+ * 省掉取音请求里建会话那一段（约 1.9 s）。
+ *
+ * 幂等在 `sessionFor`：已经有会话就什么都不做（`ready`），正在建就等同一次，不会多建。不发回合，所以不过
+ * `takeRate`——限速只数真正发出去的朗读回合。**失败不往外抛**：没配朗读 agent、平台报错都只回一个状态词，
+ * 后面 `readClip` 照旧懒建。
+ */
+export async function prewarmReader(coachSessionId: string): Promise<PrewarmOutcome> {
+  const agentId = readerAgentId();
+  if (!agentId) return "not_configured";
+  const key = keyOf(coachSessionId);
+  const startedAt = Date.now();
+  try {
+    sweep(startedAt);
+    const had = sessions.get(key);
+    const joining = opening.has(key);
+    const session = await sessionFor(key, agentId);
+    if (session === had || joining) return "ready";
+    console.info(`[course/reader] prewarm opened ${idTag("session", key)} in ${Date.now() - startedAt} ms`);
+    return "opened";
+  } catch (err) {
+    const code = (err as { code?: unknown } | null)?.code;
+    console.warn(
+      `[course/reader] prewarm failed ${idTag("session", key)}: ${err instanceof Error ? err.name : "unknown"}${typeof code === "string" ? ` ${code}` : ""}`,
+    );
+    return "failed";
+  }
+}
+
 const replyOf = (parts: unknown): string =>
   (Array.isArray(parts) ? parts : [])
     .filter((p): p is { type: string; text: string } => typeof p === "object" && p !== null && (p as { type?: unknown }).type === "text")
@@ -167,11 +218,17 @@ async function speakOnce(session: ReaderSession, text: string): Promise<ReaderAu
   session.lastUsed = Date.now();
   const turn = await client.sessions.sendTurn(session.id, { text });
   if (turn.kind === "revival_in_progress") throw new ReaderError("upstream", "reader 会话正在恢复");
-  const { turn: settled } = await client.sessions.waitForTurn(session.id, turn.turnId, { timeoutMs: TURN_TIMEOUT_MS });
+  const { turn: settled } = await client.sessions.waitForTurn(session.id, turn.turnId, {
+    timeoutMs: TURN_TIMEOUT_MS,
+    intervalMs: TURN_POLL_MS,
+  });
   if (!isExactEcho(replyOf(settled.assistant?.parts), text)) {
     throw new ReaderError("echo_mismatch", "朗读回合的正文和原文不一致");
   }
-  const audio = await client.sessions.waitForTurnAudio(session.id, turn.turnId, { timeoutMs: TURN_TIMEOUT_MS });
+  const audio = await client.sessions.waitForTurnAudio(session.id, turn.turnId, {
+    timeoutMs: TURN_TIMEOUT_MS,
+    intervalMs: TURN_POLL_MS,
+  });
   if (audio.status !== "ready" || audio.segments.length === 0) {
     throw new ReaderError("audio_failed", `合成没成：${audio.status}${audio.failure ? ` ${audio.failure.reason}` : ""}`);
   }
@@ -189,12 +246,13 @@ async function speakOnce(session: ReaderSession, text: string): Promise<ReaderAu
 }
 
 /**
- * 念一句（已过 `reader-guard` 的守卫）。`key` 是学员的 coach 会话 id：reader 会话和限速都按它分。
+ * 念一句（已过 `reader-guard` 的守卫）。`coachSessionId` 是学员的 coach 会话 id：reader 会话和限速都按它分。
  * 命中缓存直接回；同一句正在合成就等那一次；否则限速、排进这个学员的 reader 会话。
  */
-export async function readClip(key: string, text: string): Promise<{ audio: ReaderAudio; source: "cache" | "reader" }> {
+export async function readClip(coachSessionId: string, text: string): Promise<{ audio: ReaderAudio; source: "cache" | "reader" }> {
   const agentId = readerAgentId();
   if (!agentId) throw new ReaderError("not_configured", `站点没有配置 ${READER_AGENT_ENV}`);
+  const key = keyOf(coachSessionId);
   const hit = cache.get(text);
   if (hit) return { audio: hit, source: "cache" };
   const pending = inflight.get(text);
